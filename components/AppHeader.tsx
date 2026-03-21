@@ -26,8 +26,8 @@ export default function AppHeader() {
           <Image
             src="/logo.png"
             alt="ShadowFox Sports Cards"
-            width={64}
-            height={64}
+            width={72}
+            height={72}
             className="sfLogo"
             priority
           />
