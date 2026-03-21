@@ -1067,3 +1067,96 @@ html { scroll-behavior: smooth; }
     padding: 10px;
   }
 }
+/* ===== HOMEPAGE ===== */
+
+.sfHero {
+  padding: 40px 20px;
+  border-radius: 20px;
+  margin-bottom: 24px;
+
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,0.05), transparent 40%),
+    linear-gradient(135deg, #070b14, #0a1830);
+
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.sfHeroContent {
+  max-width: 700px;
+}
+
+.sfHeroTitle {
+  font-size: clamp(2.2rem, 3vw, 3.2rem);
+  font-weight: 900;
+  margin-bottom: 12px;
+  letter-spacing: -0.03em;
+}
+
+.sfHeroSub {
+  opacity: 0.75;
+  margin-bottom: 20px;
+  font-size: 1.05rem;
+}
+
+.sfHeroButtons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* FEATURES */
+
+.sfGrid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.sfFeatureCard {
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: all 0.2s ease;
+}
+
+.sfFeatureCard:hover {
+  transform: translateY(-3px);
+}
+
+.sfFeatureIcon {
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+}
+
+.sfFeatureTitle {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.sfFeatureText {
+  opacity: 0.7;
+  font-size: 0.95rem;
+}
+
+/* LOGIN */
+
+.sfAuthSection {
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* MOBILE */
+
+@media (max-width: 900px) {
+  .sfGrid3 {
+    grid-template-columns: 1fr;
+  }
+
+  .sfHero {
+    padding: 28px 16px;
+  }
+}
