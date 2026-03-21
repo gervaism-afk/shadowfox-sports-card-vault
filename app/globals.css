@@ -645,3 +645,18 @@ html { scroll-behavior: smooth; }
     padding: 10px;
   }
 }
+.sfLogo {
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.sfBrandText {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 1.05rem;
+}
+
+.sfAdminBtn {
+  border-color: rgba(215,163,74,0.4);
+  background: rgba(215,163,74,0.08);
+}
