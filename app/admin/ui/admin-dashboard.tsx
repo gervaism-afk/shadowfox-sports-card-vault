@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import AppHeader from '@/components/AppHeader';
 
 type UserRow = {
   id: string;
@@ -215,10 +216,10 @@ export default function AdminDashboard() {
   }
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / 20)), [total]);
-  if (!ready) return <div className="pageShell"><div className="container"><section className="panel">Checking admin access...</section></div></div>;
+  if (!ready) return <div className="pageShell"><div className="container"><AppHeader /><section className="panel">Checking admin access...</section></div></div>;
 
   return (
-    <div className="pageShell"><div className="container" style={{display:'grid', gap:20}}>
+    <div className="pageShell"><div className="container" style={{display:'grid', gap:20}}><AppHeader /><section className="vaultHero"><div><div className="vaultEyebrow">Admin Control</div><h1 className="vaultTitle">Manage users, cards, and roles.</h1><p className="vaultText">Use the same ShadowFox control surface across the full app with a consistent top navigation and premium dashboard styling.</p></div><div className="vaultButtonRow"><button className="sfSecondaryBtn" onClick={() => { loadStats(); loadUsers(); if (selectedUserId) loadUserCards(selectedUserId); }}>Refresh</button></div></section>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 6 }}>Admin Dashboard</h1>
