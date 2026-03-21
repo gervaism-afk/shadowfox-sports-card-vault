@@ -660,3 +660,92 @@ html { scroll-behavior: smooth; }
   border-color: rgba(215,163,74,0.4);
   background: rgba(215,163,74,0.08);
 }
+/* ===== OLD BANNER STYLE (UPGRADED) ===== */
+
+.sfHeaderBanner {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  margin-bottom: 20px;
+
+  border-radius: 20px;
+  overflow: hidden;
+
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255,255,255,0.06), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(215,163,74,0.18), transparent 50%),
+    linear-gradient(135deg, #05070c, #0a1428 40%, #0c1c3a);
+
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.sfHeaderOverlay {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 22px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* BRAND */
+.sfBrandRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+  color: white;
+}
+
+.sfLogo {
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+
+.sfBrandTextWrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.sfBrandTitle {
+  font-weight: 900;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+}
+
+.sfBrandSub {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+/* NAV */
+.sfNavRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* BUTTONS */
+.sfTopBtn {
+  padding: 8px 14px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: white;
+
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+
+  transition: all 0.2s ease;
+}
+
+.sfTopBtn:hover {
+  background: rgba(255,255,255,0.1);
+  transform: translateY(-1px);
+}
+
+/* ADMIN SPECIAL */
+.sfAdminBtn {
+  background: rgba(215,163,74,0.15);
+  border-color: rgba(215,163,74,0.5);
+}
