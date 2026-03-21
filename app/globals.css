@@ -366,3 +366,282 @@ html { scroll-behavior: smooth; }
   .vaultHero { padding: 18px; border-radius: 20px; }
   .premiumHeader { position: static; }
 }
+
+
+/* Production polish pack */
+
+.sfHeader {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  backdrop-filter: blur(10px);
+  background: rgba(10, 10, 10, 0.78);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  margin-bottom: 18px;
+}
+
+.sfHeaderInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  flex-wrap: wrap;
+}
+
+.sfBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.sfBrandMark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+  background: linear-gradient(135deg, #d7a34a, #f0c26c);
+  color: #111;
+  box-shadow: 0 10px 24px rgba(215,163,74,0.18);
+}
+
+.sfNav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.sfNavLink {
+  text-decoration: none;
+  color: inherit;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.sfNavLink:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.05);
+}
+
+.sfPageTitle {
+  margin: 0 0 6px;
+  font-size: clamp(1.8rem, 2.8vw, 2.8rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.sfSectionTitle {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.sfMuted {
+  opacity: 0.8;
+}
+
+.sfSubtle {
+  opacity: 0.68;
+  margin-top: 6px;
+}
+
+.sfAdminShell {
+  display: grid;
+  gap: 18px;
+}
+
+.sfAdminTop,
+.sfToolbar,
+.sfInlineActions,
+.sfPager {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sfPanel,
+.sfStatBox,
+.sfListCard,
+.sfModalCard,
+.sfAdminBanner,
+.sfBanner {
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.03);
+  box-shadow: 0 18px 45px rgba(0,0,0,0.16);
+}
+
+.sfPanel,
+.sfAdminBanner,
+.sfBanner {
+  padding: 16px;
+}
+
+.sfBannerSuccess {
+  border-color: rgba(57, 200, 120, 0.35);
+}
+
+.sfBannerError {
+  border-color: rgba(220, 80, 80, 0.35);
+}
+
+.sfStatGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sfStatBox {
+  padding: 16px;
+}
+
+.sfStatLabel {
+  opacity: 0.72;
+  margin-bottom: 8px;
+  font-size: 0.92rem;
+}
+
+.sfStatNumber {
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+.sfInput,
+.sfTextarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  color: inherit;
+}
+
+.sfInput {
+  min-width: 220px;
+}
+
+.sfTextarea {
+  margin-top: 12px;
+  resize: vertical;
+}
+
+.sfGhostBtn,
+.sfPrimaryBtn,
+.sfDangerBtn {
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  color: inherit;
+  cursor: pointer;
+}
+
+.sfPrimaryBtn {
+  background: linear-gradient(135deg, #d7a34a, #f0c26c);
+  color: #111;
+  border-color: transparent;
+  font-weight: 700;
+}
+
+.sfDangerBtn {
+  border-color: rgba(220, 80, 80, 0.28);
+}
+
+.sfGhostBtn.small,
+.sfDangerBtn.small {
+  min-height: 36px;
+  padding: 0 11px;
+}
+
+.sfGhostBtn:disabled,
+.sfPrimaryBtn:disabled,
+.sfDangerBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sfTableWrap {
+  overflow: auto;
+}
+
+.sfTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sfTable th,
+.sfTable td {
+  text-align: left;
+  padding: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.sfTable th.right,
+.sfTable td.right,
+.right {
+  text-align: right;
+}
+
+.sfCardList {
+  display: grid;
+  gap: 12px;
+}
+
+.sfListCard {
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.sfListTitle {
+  font-weight: 700;
+}
+
+.sfModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: 20px;
+  background: rgba(0,0,0,0.66);
+  display: grid;
+  place-items: center;
+}
+
+.sfModalCard {
+  width: min(820px, 100%);
+  padding: 18px;
+  background: #101010;
+}
+
+.sfFormGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .sfStatGrid,
+  .sfFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sfTable th,
+  .sfTable td {
+    padding: 10px;
+  }
+}
