@@ -57,7 +57,19 @@ export default function ScanPage() {
 
   return (
     <AuthGate>
-      <PageShell title="Scan">
+      <PageShell>
+        <section className="vaultHero">
+          <div>
+            <div className="vaultEyebrow">Scan Workflow</div>
+            <h1 className="vaultTitle">Scan cards into your ShadowFox vault.</h1>
+            <p className="vaultText">Use upload or camera mode, run OCR, check for duplicates, and save with confidence.</p>
+          </div>
+          <div className="vaultButtonRow">
+            <button className="sfSecondaryBtn" onClick={() => router.push("/manual")}>Add Manually</button>
+            <button className="sfSecondaryBtn" onClick={() => router.push("/collection")}>View Collection</button>
+          </div>
+        </section>
+
         <div className="layout2">
           <section className="panel">
             <div className="buttonRow">
@@ -72,6 +84,7 @@ export default function ScanPage() {
               <div className="previewCard cardFrame">{card.backImage ? <img src={card.backImage} alt="Back preview" /> : <span>Back preview</span>}</div>
             </div>
           </section>
+
           <section className="panel">
             <CardForm value={card} onChange={setCard} showImageFields={false} />
             <div className="fieldBlockWide" style={{ marginTop: 16 }}><label className="label">OCR Text</label><textarea className="input textarea" value={ocrText} readOnly placeholder="Detected text will appear here after upload/camera." /></div>
