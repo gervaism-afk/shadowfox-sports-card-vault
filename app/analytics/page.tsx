@@ -30,11 +30,23 @@ export default function AnalyticsPage() {
   const topCards = useMemo(() => [...cards].sort((a, b) => recordTotal(b) - recordTotal(a)).slice(0, 8), [cards]);
   return (
     <AuthGate>
-      <PageShell title="Portfolio Dashboard">
+      <PageShell>
+        <section className="vaultHero">
+          <div>
+            <div className="vaultEyebrow">Portfolio Analytics</div>
+            <h1 className="vaultTitle">Read your collection like a portfolio.</h1>
+            <p className="vaultText">Measure value, track card mix, review your strongest holdings, and spot trends across the vault.</p>
+          </div>
+          <div className="vaultButtonRow">
+            <div className="teamBadge">Graded: {gradedQty}</div>
+            <div className="teamBadge">Rookies: {rookieQty}</div>
+          </div>
+        </section>
+
         {error ? <section className="panel" style={{ marginBottom: 16 }}>{error}</section> : null}
         {!cards.length ? <section className="softPanel emptyState fadeInUp" style={{ marginBottom: 18 }}><div className="emptyStateIcon softPulse">📈</div><div className="emptyStateTitle">Analytics will appear after you add cards</div><div className="emptyStateText">Once your vault has cards, you’ll see portfolio value, player breakdowns, brand value, team value, and top-card insights here.</div></section> : null}
         <section className="heroGrid"><div className="kpiCard"><div className="kpiLabel">Estimated Portfolio Value</div><div className="kpiValue">${total.toFixed(2)}</div></div><div className="kpiCard"><div className="kpiLabel">Total Cards</div><div className="kpiValue">{totalQty}</div></div><div className="kpiCard"><div className="kpiLabel">Unique Cards</div><div className="kpiValue">{unique}</div></div></section>
-        <section className="pillRow" style={{ margin: "18px 0" }}><div className="teamBadge">Graded: {gradedQty}</div><div className="teamBadge">Rookies: {rookieQty}</div><div className="teamBadge">Autographs: {autoQty}</div><div className="teamBadge">Relic/Patch: {relicQty}</div><div className="teamBadge">Avg Card: ${avgCard.toFixed(2)}</div></section>
+        <section className="pillRow" style={{ margin: "18px 0" }}><div className="teamBadge">Autographs: {autoQty}</div><div className="teamBadge">Relic/Patch: {relicQty}</div><div className="teamBadge">Avg Card: ${avgCard.toFixed(2)}</div></section>
         <div className="analyticsBand"><section className="chartPanel"><h3 className="featurePreviewTitle">Cards by Sport</h3><BarList items={sportCounts} /></section><section className="chartPanel"><h3 className="featurePreviewTitle">Most Owned Players</h3><BarList items={playerCounts} /></section></div>
         <div className="analyticsBand" style={{ marginTop: 18 }}><section className="chartPanel"><h3 className="featurePreviewTitle">Value by Brand</h3><BarList items={brandValues} currency /></section><section className="chartPanel"><h3 className="featurePreviewTitle">Value by Team</h3><BarList items={teamValues} currency /></section></div>
         <div className="analyticsBand" style={{ marginTop: 18 }}><section className="chartPanel"><h3 className="featurePreviewTitle">Cards by Year</h3><div className="sparkWrap">{yearCounts.map(([label, val]) => { const max = Math.max(1, ...yearCounts.map((x) => x[1])); return <div key={label} style={{ display: "grid", alignItems: "end" }}><div className="sparkBar" style={{ height: `${Math.max(10, (val / max) * 100)}%` }} title={`${label}: ${val}`} /></div>; })}</div><div className="helperText" style={{ marginTop: 8 }}>Hover bars for year totals</div></section><section className="chartPanel"><h3 className="featurePreviewTitle">Top Value Cards</h3><div className="topCardList">{topCards.map((c) => <div className="topCardItem" key={c.id}><div className="topCardThumb cardFrame">{c.frontImage ? <img src={c.frontImage} alt={c.player || "Card"} /> : <span>No image</span>}</div><div><strong>{c.player || "Untitled Card"}</strong><div className="helperText">{c.year} {c.brand} {c.set} #{c.cardNumber}</div><div className="helperText">Qty {c.quantity} • Each ${Number(c.estimatedValueCad || 0).toFixed(2)}</div></div><strong>${recordTotal(c).toFixed(2)}</strong></div>)}</div></section></div>
