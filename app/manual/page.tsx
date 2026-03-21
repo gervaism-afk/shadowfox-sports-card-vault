@@ -18,7 +18,19 @@ export default function ManualPage() {
 
   return (
     <AuthGate>
-      <PageShell title="Add Manually">
+      <PageShell>
+        <section className="vaultHero">
+          <div>
+            <div className="vaultEyebrow">Manual Entry</div>
+            <h1 className="vaultTitle">Add cards manually with full control.</h1>
+            <p className="vaultText">Enter details, upload images if you want, check duplicates, and save polished records to your vault.</p>
+          </div>
+          <div className="vaultButtonRow">
+            <button className="sfSecondaryBtn" onClick={() => router.push("/scan")}>Use Scanner</button>
+            <button className="sfSecondaryBtn" onClick={() => router.push("/collection")}>Open Collection</button>
+          </div>
+        </section>
+
         <section className="panel">
           <div className="helperText" style={{ marginBottom: 16 }}>Manual adds allow front image, back image, or no image at all.</div>
           <CardForm value={card} onChange={setCard} />
