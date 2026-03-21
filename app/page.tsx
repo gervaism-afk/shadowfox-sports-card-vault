@@ -10,22 +10,10 @@ import { CardRecord } from "@/lib/types";
 import { useAuth } from "@/components/AuthProvider";
 
 const guestFeatures = [
-  {
-    title: "Fast Card Scanning",
-    text: "Scan and capture your cards quickly with a clean workflow built for collectors.",
-  },
-  {
-    title: "Manual Add Mode",
-    text: "Add cards by hand with full control over details, notes, and condition data.",
-  },
-  {
-    title: "Vault Collection",
-    text: "Browse, filter, and manage your collection in a polished collector-first layout.",
-  },
-  {
-    title: "Portfolio Analytics",
-    text: "Track value, count, and portfolio insights across your ShadowFox vault.",
-  },
+  { title: "Fast Card Scanning", text: "Scan and capture your cards quickly with a clean workflow built for collectors." },
+  { title: "Manual Add Mode", text: "Add cards by hand with full control over details, notes, and condition data." },
+  { title: "Vault Collection", text: "Browse, filter, and manage your collection in a polished collector-first layout." },
+  { title: "Portfolio Analytics", text: "Track value, count, and portfolio insights across your ShadowFox vault." },
 ];
 
 const trustPoints = [
@@ -45,8 +33,14 @@ export default function HomePage() {
     loadCards().then(setCards).catch((e) => setError(e.message || "Failed to load cards"));
   }, [user]);
 
-  const hockeyCount = useMemo(() => cards.filter((c) => c.sport === "Hockey").reduce((s, c) => s + (Number(c.quantity) || 0), 0), [cards]);
-  const baseballCount = useMemo(() => cards.filter((c) => c.sport === "Baseball").reduce((s, c) => s + (Number(c.quantity) || 0), 0), [cards]);
+  const hockeyCount = useMemo(
+    () => cards.filter((c) => c.sport === "Hockey").reduce((s, c) => s + (Number(c.quantity) || 0), 0),
+    [cards]
+  );
+  const baseballCount = useMemo(
+    () => cards.filter((c) => c.sport === "Baseball").reduce((s, c) => s + (Number(c.quantity) || 0), 0),
+    [cards]
+  );
 
   if (loading) return <PageShell><section className="panel">Loading…</section></PageShell>;
 
@@ -56,7 +50,6 @@ export default function HomePage() {
         <section className="sfHero">
           <div className="sfHeroGlow sfHeroGlowOne" />
           <div className="sfHeroGlow sfHeroGlowTwo" />
-
           <div className="sfHeroInner sfHeroInnerAuth">
             <div className="sfHeroCopy">
               <div className="sfEyebrow">ShadowFox Sports Cards</div>
@@ -67,8 +60,8 @@ export default function HomePage() {
               </p>
 
               <div className="sfHeroActions">
-                <Link href="#auth" className="sfPrimaryBtn">Log In to Start</Link>
-                <Link href="#auth" className="sfSecondaryBtn">Create Account</Link>
+                <a href="#auth" className="sfPrimaryBtn">Log In to Start</a>
+                <a href="#auth" className="sfSecondaryBtn">Create Account</a>
               </div>
 
               <div className="sfTrustGrid">
@@ -116,6 +109,20 @@ export default function HomePage() {
   return (
     <PageShell>
       {error ? <section className="panel" style={{ marginBottom: 16 }}>{error}</section> : null}
+
+      <section className="vaultHero">
+        <div>
+          <div className="vaultEyebrow">Collector Dashboard</div>
+          <h1 className="vaultTitle">Welcome back to your ShadowFox vault.</h1>
+          <p className="vaultText">
+            Jump into scanning, manual entry, collection review, and portfolio analytics from one place.
+          </p>
+        </div>
+        <div className="vaultButtonRow">
+          <Link className="sfPrimaryBtn" href="/scan">Start Scanning</Link>
+          <Link className="sfSecondaryBtn" href="/collection">Open Collection</Link>
+        </div>
+      </section>
 
       <section className="heroGrid">
         <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Total Cards</div><div className="kpiValue">{totalCards(cards)}</div></div>
