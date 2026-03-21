@@ -1,2 +1,0 @@
-This package removes package-lock.json because the previous lock file contained environment-specific registry URLs.
-Vercel should generate a fresh dependency tree from package.json during install.
