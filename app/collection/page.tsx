@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "@/components/PageShell";
 import AuthGate from "@/components/AuthGate";
@@ -24,7 +25,19 @@ export default function CollectionPage() {
 
   return (
     <AuthGate>
-      <PageShell title="Collection">
+      <PageShell>
+        <section className="vaultHero">
+          <div>
+            <div className="vaultEyebrow">Collection Vault</div>
+            <h1 className="vaultTitle">Manage, filter, and review your full collection.</h1>
+            <p className="vaultText">Search your vault, export data, switch views, and keep your collection organized like a premium catalog.</p>
+          </div>
+          <div className="vaultButtonRow">
+            <button className="sfSecondaryBtn" onClick={exportJson}>Export JSON</button>
+            <button className="sfSecondaryBtn" onClick={exportCsv}>Export CSV</button>
+          </div>
+        </section>
+
         <div className="collectionShell">
           {error ? <section className="panel" style={{ marginBottom: 16 }}>{error}</section> : null}
           <section className="heroGrid">
@@ -32,7 +45,6 @@ export default function CollectionPage() {
             <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Unique Cards</div><div className="kpiValue">{uniqueCards(filtered)}</div></div>
             <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Estimated Collection Value</div><div className="kpiValue">${totalValue(filtered).toFixed(2)} CAD</div></div>
           </section>
-          <section className="premiumControls"><div className="buttonRow" style={{ marginBottom: 0 }}><button className="btn" onClick={exportJson}>Export JSON</button><button className="btn" onClick={exportCsv}>Export CSV</button></div></section>
           <CollectionControls filters={filters} setFilters={setFilters} sortKey={sortKey} setSortKey={setSortKey} viewMode={viewMode} setViewMode={setViewMode} />
           {!filtered.length ? <section className="softPanel emptyState fadeInUp"><div className="emptyStateIcon softPulse">📚</div><div className="emptyStateTitle">Your filtered view is empty</div><div className="emptyStateText">Try changing your search, filters, or add a new card to start building your ShadowFox vault.</div></section> : viewMode === "list" ? <CollectionTable cards={filtered} /> : <CollectionGrid cards={filtered} />}
         </div>
