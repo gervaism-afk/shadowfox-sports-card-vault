@@ -40,7 +40,7 @@ export default function AppHeader() {
           <Link href="/manual">Add</Link>
           <Link href="/collection">Collection</Link>
           <Link href="/analytics">Analytics</Link>
-
+          <Link href="/admin">Admin</Link>
           {/* ADMIN BUTTON (ONLY IF ADMIN) */}
           {isAdmin && (
             <Link href="/admin" className="adminBtn">
