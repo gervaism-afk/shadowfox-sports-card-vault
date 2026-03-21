@@ -366,3 +366,11 @@ html { scroll-behavior: smooth; }
   .vaultHero { padding: 18px; border-radius: 20px; }
   .premiumHeader { position: static; }
 }
+.adminBtn {
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #d7a34a, #f0c26c);
+  color: #111;
+  font-weight: 700;
+  margin-left: 6px;
+}
