@@ -5,28 +5,31 @@ import Image from "next/image";
 
 export default function AppHeader() {
   return (
-    <header className="sfHeader">
-      <div className="sfHeaderInner">
+    <header className="sfHeaderBanner">
+      <div className="sfHeaderOverlay">
 
-        {/* LOGO + BRAND */}
-        <Link href="/" className="sfBrand">
+        {/* LEFT SIDE (LOGO + NAME) */}
+        <Link href="/" className="sfBrandRow">
           <Image
             src="/logo.png"
             alt="ShadowFox Sports Cards"
-            width={42}
-            height={42}
+            width={48}
+            height={48}
             className="sfLogo"
           />
-          <span className="sfBrandText">ShadowFox Sports Cards</span>
+          <div className="sfBrandTextWrap">
+            <div className="sfBrandTitle">ShadowFox Sports Cards</div>
+            <div className="sfBrandSub">Premium Card Tracking System</div>
+          </div>
         </Link>
 
-        {/* NAV */}
-        <nav className="sfNav">
-          <Link href="/scan" className="sfNavLink">Scan</Link>
-          <Link href="/manual" className="sfNavLink">Add</Link>
-          <Link href="/collection" className="sfNavLink">Collection</Link>
-          <Link href="/analytics" className="sfNavLink">Analytics</Link>
-          <Link href="/admin" className="sfNavLink sfAdminBtn">Admin</Link>
+        {/* NAV BUTTONS */}
+        <nav className="sfNavRow">
+          <Link href="/scan" className="sfTopBtn">Scan</Link>
+          <Link href="/manual" className="sfTopBtn">Add</Link>
+          <Link href="/collection" className="sfTopBtn">Collection</Link>
+          <Link href="/analytics" className="sfTopBtn">Analytics</Link>
+          <Link href="/admin" className="sfTopBtn sfAdminBtn">Admin</Link>
         </nav>
 
       </div>
