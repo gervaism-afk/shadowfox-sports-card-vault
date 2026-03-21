@@ -854,3 +854,25 @@ html { scroll-behavior: smooth; }
     height: 56px;
   }
 }
+/* Content editor system */
+
+.sfFeatureEditorGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sfMiniPanel {
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.03);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 980px) {
+  .sfFeatureEditorGrid {
+    grid-template-columns: 1fr;
+  }
+}
