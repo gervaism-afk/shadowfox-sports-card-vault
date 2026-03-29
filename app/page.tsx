@@ -1,123 +1,134 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import PageShell from "@/components/PageShell";
 import LoginPanel from "@/components/LoginPanel";
+import { useEffect, useMemo, useState } from "react";
+import { loadCards } from "@/lib/storage";
+import { totalCards, totalValue, uniqueCards } from "@/lib/utils";
+import { CardRecord } from "@/lib/types";
+import { useAuth } from "@/components/AuthProvider";
+import { PAGE_CONTENT_DEFAULTS } from "@/lib/content/defaults";
 
-type HomeContent = {
-  heroEyebrow: string;
-  heroTitle: string;
-  heroSubtitle: string;
-  primaryLabel: string;
-  primaryHref: string;
-  secondaryLabel: string;
-  secondaryHref: string;
-  loginHeading: string;
-  loginText: string;
-  feature1Icon: string;
-  feature1Title: string;
-  feature1Text: string;
-  feature2Icon: string;
-  feature2Title: string;
-  feature2Text: string;
-  feature3Icon: string;
-  feature3Title: string;
-  feature3Text: string;
-};
-
-const fallbackContent: HomeContent = {
-  heroEyebrow: "ShadowFox Sports Cards",
-  heroTitle: "Track Your Collection Like a Pro",
-  heroSubtitle: "ShadowFox Sports Cards helps you scan, organize, and value your cards with a premium collector-first experience.",
-  primaryLabel: "Start Scanning",
-  primaryHref: "/scan",
-  secondaryLabel: "View Collection",
-  secondaryHref: "/collection",
-  loginHeading: "Log in or create your ShadowFox vault",
-  loginText: "Sign in to manage your collection, unlock analytics, and keep your card vault synced and protected.",
-  feature1Icon: "📸",
-  feature1Title: "Scan Cards",
-  feature1Text: "Quickly capture card data and move cards into your vault faster.",
-  feature2Icon: "📊",
-  feature2Title: "Track Value",
-  feature2Text: "Monitor collection totals, card counts, and portfolio insights.",
-  feature3Icon: "🗂️",
-  feature3Title: "Organize Easily",
-  feature3Text: "Sort, filter, and manage your collection in one premium workspace.",
-};
+type HomeContent = typeof PAGE_CONTENT_DEFAULTS.homepage;
 
 export default function HomePage() {
-  const [content, setContent] = useState<HomeContent>(fallbackContent);
+  const { user, loading } = useAuth();
+  const [cards, setCards] = useState<CardRecord[]>([]);
+  const [error, setError] = useState("");
+  const [content, setContent] = useState<HomeContent>(PAGE_CONTENT_DEFAULTS.homepage);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadContent() {
-      try {
-        const res = await fetch("/api/content/homepage", { cache: "no-store" });
-        const json = await res.json();
-        if (active && json?.content) {
-          setContent({ ...fallbackContent, ...json.content });
-        }
-      } catch (error) {
-        console.error("Failed to load homepage content", error);
-      }
-    }
-
-    loadContent();
-    return () => {
-      active = false;
-    };
+    fetch("/api/content/homepage", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => setContent({ ...PAGE_CONTENT_DEFAULTS.homepage, ...(json?.content || {}) }))
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    loadCards().then(setCards).catch((e) => setError(e.message || "Failed to load cards"));
+  }, [user]);
+
+  const hockeyCount = useMemo(() => cards.filter((c) => c.sport === "Hockey").reduce((s, c) => s + (Number(c.quantity) || 0), 0), [cards]);
+  const baseballCount = useMemo(() => cards.filter((c) => c.sport === "Baseball").reduce((s, c) => s + (Number(c.quantity) || 0), 0), [cards]);
+
+  if (loading) return <PageShell><section className="panel">Loading…</section></PageShell>;
+
+  if (!user) {
+    return (
+      <PageShell>
+        <div className="premiumHeroPage">
+          <section className="premiumBgShell landingSplit">
+            <div className="landingLeft">
+              <div className="premiumTopBadge">⚡ Premium Cloud Vault • Desktop + Mobile</div>
+
+              <div className="landingBrandRow">
+                <div className="premiumBrandMark">
+                  <img src="/logo.png" alt="ShadowFox" />
+                </div>
+
+                <div>
+                  <div className="sfEyebrowMini" style={{ marginBottom: 12 }}>{content.heroEyebrow}</div>
+                  <h1 className="premiumTitle landingTitle">{content.heroTitle}</h1>
+                  <div className="premiumSubtitle landingSubtitle">{content.heroSubtitle}</div>
+                </div>
+              </div>
+
+              <div className="sfHeroButtons" style={{ marginBottom: 18 }}>
+                <Link href={content.primaryHref} className="sfPrimaryBtn">{content.primaryLabel}</Link>
+                <Link href={content.secondaryHref} className="sfGhostBtn">{content.secondaryLabel}</Link>
+              </div>
+
+              <div className="featurePills landingPills">
+                <div className="featurePill">Secure Login</div>
+                <div className="featurePill">Cloud Sync</div>
+                <div className="featurePill">Hockey + Baseball</div>
+                <div className="featurePill">Portfolio Analytics</div>
+              </div>
+
+              <div className="featurePreviewCard landingPreview">
+                <h3 className="featurePreviewTitle">What you can do</h3>
+                <div className="featurePreviewGrid">
+                  <div className="featurePreviewItem">
+                    <strong><span className="featurePreviewCheck">✓</span>{content.feature1Title}</strong>
+                    <span>{content.feature1Text}</span>
+                  </div>
+                  <div className="featurePreviewItem">
+                    <strong><span className="featurePreviewCheck">✓</span>{content.feature2Title}</strong>
+                    <span>{content.feature2Text}</span>
+                  </div>
+                  <div className="featurePreviewItem">
+                    <strong><span className="featurePreviewCheck">✓</span>{content.feature3Title}</strong>
+                    <span>{content.feature3Text}</span>
+                  </div>
+                  <div className="featurePreviewItem">
+                    <strong><span className="featurePreviewCheck">✓</span>Access anywhere</strong>
+                    <span>Use the same private collection on desktop, phone, or tablet.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="premiumFooterNote">
+                Built for serious Hockey &amp; Baseball collectors.
+              </div>
+            </div>
+
+            <div className="landingRight" id="auth">
+              <div style={{ marginBottom: 18 }}>
+                <h2 className="sfSectionTitle" style={{ marginBottom: 8 }}>{content.loginHeading}</h2>
+                <p className="sfMuted" style={{ lineHeight: 1.7 }}>{content.loginText}</p>
+              </div>
+              <LoginPanel />
+            </div>
+          </section>
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>
-      <section className="sfHero">
-        <div className="sfHeroContent">
-          <div className="sfEyebrowMini">{content.heroEyebrow}</div>
-          <h1 className="sfHeroTitle">{content.heroTitle}</h1>
-          <p className="sfHeroSub">{content.heroSubtitle}</p>
+      {error ? <section className="panel" style={{ marginBottom: 16 }}>{error}</section> : null}
 
-          <div className="sfHeroButtons">
-            <Link href={content.primaryHref || "/scan"} className="sfPrimaryBtn">
-              {content.primaryLabel}
-            </Link>
-            <Link href={content.secondaryHref || "/collection"} className="sfGhostBtn">
-              {content.secondaryLabel}
-            </Link>
-          </div>
-        </div>
+      <section className="heroGrid">
+        <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Total Cards</div><div className="kpiValue">{totalCards(cards)}</div></div>
+        <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Unique Cards</div><div className="kpiValue">{uniqueCards(cards)}</div></div>
+        <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Estimated Collection Value</div><div className="kpiValue">${totalValue(cards).toFixed(2)} CAD</div></div>
       </section>
 
-      <section className="sfGrid3">
-        <div className="sfFeatureCard">
-          <div className="sfFeatureIcon">{content.feature1Icon}</div>
-          <div className="sfFeatureTitle">{content.feature1Title}</div>
-          <div className="sfFeatureText">{content.feature1Text}</div>
-        </div>
-
-        <div className="sfFeatureCard">
-          <div className="sfFeatureIcon">{content.feature2Icon}</div>
-          <div className="sfFeatureTitle">{content.feature2Title}</div>
-          <div className="sfFeatureText">{content.feature2Text}</div>
-        </div>
-
-        <div className="sfFeatureCard">
-          <div className="sfFeatureIcon">{content.feature3Icon}</div>
-          <div className="sfFeatureTitle">{content.feature3Title}</div>
-          <div className="sfFeatureText">{content.feature3Text}</div>
-        </div>
+      <section className="heroGrid" style={{ marginBottom: 18 }}>
+        <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Hockey Cards</div><div className="kpiValue">{hockeyCount}</div></div>
+        <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Baseball Cards</div><div className="kpiValue">{baseballCount}</div></div>
+        <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Vault Status</div><div className="kpiValue">Private</div></div>
       </section>
 
-      <section className="sfAuthSection" id="auth">
-        <div style={{ marginBottom: 18 }}>
-          <div className="sfEyebrowMini">Collector Access</div>
-          <h2 className="sfSectionTitle" style={{ marginBottom: 8 }}>{content.loginHeading}</h2>
-          <p className="sfMuted" style={{ lineHeight: 1.7 }}>{content.loginText}</p>
-        </div>
-
-        <LoginPanel />
+      <section className="actionGrid">
+        <Link className="actionCard" href="/scan"><strong>{content.feature1Title}</strong><span>{content.feature1Text}</span></Link>
+        <Link className="actionCard" href="/collection"><strong>{content.feature2Title}</strong><span>{content.feature2Text}</span></Link>
+        <Link className="actionCard" href="/collection"><strong>{content.feature3Title}</strong><span>{content.feature3Text}</span></Link>
+        <Link className="actionCard" href="/analytics"><strong>Portfolio Dashboard</strong><span>Track value, top cards, sport mix, and collection breakdowns.</span></Link>
       </section>
     </PageShell>
   );
