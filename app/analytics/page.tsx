@@ -1,3 +1,4 @@
+
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "@/components/PageShell";
@@ -5,15 +6,25 @@ import AuthGate from "@/components/AuthGate";
 import { loadCards } from "@/lib/storage";
 import { CardRecord } from "@/lib/types";
 import { recordTotal, totalCards, totalValue, uniqueCards } from "@/lib/utils";
+import { PAGE_CONTENT_DEFAULTS } from "@/lib/content/defaults";
 
 function sumBy<T extends string>(cards: CardRecord[], getter: (c: CardRecord) => T) { const map = new Map<T, number>(); for (const c of cards) { const key = getter(c) || ("Unknown" as T); map.set(key, (map.get(key) || 0) + Number(c.quantity || 0)); } return Array.from(map.entries()).sort((a, b) => b[1] - a[1]); }
 function valueBy<T extends string>(cards: CardRecord[], getter: (c: CardRecord) => T) { const map = new Map<T, number>(); for (const c of cards) { const key = getter(c) || ("Unknown" as T); map.set(key, (map.get(key) || 0) + recordTotal(c)); } return Array.from(map.entries()).sort((a, b) => b[1] - a[1]); }
 function BarList({ items, currency = false }: { items: [string, number][], currency?: boolean }) { const max = Math.max(1, ...items.map((x) => x[1])); return <div className="barList">{items.map(([label, val]) => <div className="barRow" key={label}><div className="barMeta"><span>{label}</span><span>{currency ? `$${val.toFixed(2)}` : val}</span></div><div className="barTrack"><div className="barFill" style={{ width: `${Math.max(6, (val / max) * 100)}%` }} /></div></div>)}</div>; }
 
+type PageContent = typeof PAGE_CONTENT_DEFAULTS.analytics;
+
 export default function AnalyticsPage() {
   const [cards, setCards] = useState<CardRecord[]>([]);
   const [error, setError] = useState("");
+  const [content, setContent] = useState<PageContent>(PAGE_CONTENT_DEFAULTS.analytics);
   useEffect(() => { loadCards().then(setCards).catch((e) => setError(e.message || "Failed to load analytics")); }, []);
+  useEffect(() => {
+    fetch("/api/content/analytics", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => setContent({ ...PAGE_CONTENT_DEFAULTS.analytics, ...(json?.content || {}) }))
+      .catch(() => {});
+  }, []);
   const total = useMemo(() => totalValue(cards), [cards]);
   const totalQty = useMemo(() => totalCards(cards), [cards]);
   const unique = useMemo(() => uniqueCards(cards), [cards]);
@@ -30,26 +41,20 @@ export default function AnalyticsPage() {
   const topCards = useMemo(() => [...cards].sort((a, b) => recordTotal(b) - recordTotal(a)).slice(0, 8), [cards]);
   return (
     <AuthGate>
-      <PageShell>
-        <section className="vaultHero">
+      <PageShell title={content.title}>
+        {error ? <section className="panel" style={{ marginBottom: 16 }}>{error}</section> : null}
+        <section className="sfHeroMini" style={{ marginBottom: 18 }}>
           <div>
-            <div className="vaultEyebrow">Portfolio Analytics</div>
-            <h1 className="vaultTitle">Read your collection like a portfolio.</h1>
-            <p className="vaultText">Measure value, track card mix, review your strongest holdings, and spot trends across the vault.</p>
-          </div>
-          <div className="vaultButtonRow">
-            <div className="teamBadge">Graded: {gradedQty}</div>
-            <div className="teamBadge">Rookies: {rookieQty}</div>
+            <h1 className="sfPageHeading">{content.title}</h1>
+            <p className="sfPageIntro">{content.subtitle}</p>
           </div>
         </section>
-
-        {error ? <section className="panel" style={{ marginBottom: 16 }}>{error}</section> : null}
-        {!cards.length ? <section className="softPanel emptyState fadeInUp" style={{ marginBottom: 18 }}><div className="emptyStateIcon softPulse">📈</div><div className="emptyStateTitle">Analytics will appear after you add cards</div><div className="emptyStateText">Once your vault has cards, you’ll see portfolio value, player breakdowns, brand value, team value, and top-card insights here.</div></section> : null}
+        {!cards.length ? <section className="softPanel emptyState fadeInUp" style={{ marginBottom: 18 }}><div className="emptyStateIcon softPulse">📈</div><div className="emptyStateTitle">{content.emptyTitle}</div><div className="emptyStateText">{content.emptyText}</div></section> : null}
         <section className="heroGrid"><div className="kpiCard"><div className="kpiLabel">Estimated Portfolio Value</div><div className="kpiValue">${total.toFixed(2)}</div></div><div className="kpiCard"><div className="kpiLabel">Total Cards</div><div className="kpiValue">{totalQty}</div></div><div className="kpiCard"><div className="kpiLabel">Unique Cards</div><div className="kpiValue">{unique}</div></div></section>
-        <section className="pillRow" style={{ margin: "18px 0" }}><div className="teamBadge">Autographs: {autoQty}</div><div className="teamBadge">Relic/Patch: {relicQty}</div><div className="teamBadge">Avg Card: ${avgCard.toFixed(2)}</div></section>
-        <div className="analyticsBand"><section className="chartPanel"><h3 className="featurePreviewTitle">Cards by Sport</h3><BarList items={sportCounts} /></section><section className="chartPanel"><h3 className="featurePreviewTitle">Most Owned Players</h3><BarList items={playerCounts} /></section></div>
-        <div className="analyticsBand" style={{ marginTop: 18 }}><section className="chartPanel"><h3 className="featurePreviewTitle">Value by Brand</h3><BarList items={brandValues} currency /></section><section className="chartPanel"><h3 className="featurePreviewTitle">Value by Team</h3><BarList items={teamValues} currency /></section></div>
-        <div className="analyticsBand" style={{ marginTop: 18 }}><section className="chartPanel"><h3 className="featurePreviewTitle">Cards by Year</h3><div className="sparkWrap">{yearCounts.map(([label, val]) => { const max = Math.max(1, ...yearCounts.map((x) => x[1])); return <div key={label} style={{ display: "grid", alignItems: "end" }}><div className="sparkBar" style={{ height: `${Math.max(10, (val / max) * 100)}%` }} title={`${label}: ${val}`} /></div>; })}</div><div className="helperText" style={{ marginTop: 8 }}>Hover bars for year totals</div></section><section className="chartPanel"><h3 className="featurePreviewTitle">Top Value Cards</h3><div className="topCardList">{topCards.map((c) => <div className="topCardItem" key={c.id}><div className="topCardThumb cardFrame">{c.frontImage ? <img src={c.frontImage} alt={c.player || "Card"} /> : <span>No image</span>}</div><div><strong>{c.player || "Untitled Card"}</strong><div className="helperText">{c.year} {c.brand} {c.set} #{c.cardNumber}</div><div className="helperText">Qty {c.quantity} • Each ${Number(c.estimatedValueCad || 0).toFixed(2)}</div></div><strong>${recordTotal(c).toFixed(2)}</strong></div>)}</div></section></div>
+        <section className="pillRow" style={{ margin: "18px 0" }}><div className="teamBadge">Graded: {gradedQty}</div><div className="teamBadge">Rookies: {rookieQty}</div><div className="teamBadge">Autographs: {autoQty}</div><div className="teamBadge">Relic/Patch: {relicQty}</div><div className="teamBadge">Avg Card: ${avgCard.toFixed(2)}</div></section>
+        <div className="analyticsBand"><section className="chartPanel"><h3 className="featurePreviewTitle">{content.sectionSport}</h3><BarList items={sportCounts} /></section><section className="chartPanel"><h3 className="featurePreviewTitle">{content.sectionPlayers}</h3><BarList items={playerCounts} /></section></div>
+        <div className="analyticsBand" style={{ marginTop: 18 }}><section className="chartPanel"><h3 className="featurePreviewTitle">{content.sectionBrand}</h3><BarList items={brandValues} currency /></section><section className="chartPanel"><h3 className="featurePreviewTitle">{content.sectionTeam}</h3><BarList items={teamValues} currency /></section></div>
+        <div className="analyticsBand" style={{ marginTop: 18 }}><section className="chartPanel"><h3 className="featurePreviewTitle">{content.sectionYear}</h3><div className="sparkWrap">{yearCounts.map(([label, val]) => { const max = Math.max(1, ...yearCounts.map((x) => x[1])); return <div key={label} style={{ display: "grid", alignItems: "end" }}><div className="sparkBar" style={{ height: `${Math.max(10, (val / max) * 100)}%` }} title={`${label}: ${val}`} /></div>; })}</div><div className="helperText" style={{ marginTop: 8 }}>Hover bars for year totals</div></section><section className="chartPanel"><h3 className="featurePreviewTitle">{content.sectionTopCards}</h3><div className="topCardList">{topCards.map((c) => <div className="topCardItem" key={c.id}><div className="topCardThumb cardFrame">{c.frontImage ? <img src={c.frontImage} alt={c.player || "Card"} /> : <span>No image</span>}</div><div><strong>{c.player || "Untitled Card"}</strong><div className="helperText">{c.year} {c.brand} {c.set} #{c.cardNumber}</div><div className="helperText">Qty {c.quantity} • Each ${Number(c.estimatedValueCad || 0).toFixed(2)}</div></div><strong>${recordTotal(c).toFixed(2)}</strong></div>)}</div></section></div>
       </PageShell>
     </AuthGate>
   );
