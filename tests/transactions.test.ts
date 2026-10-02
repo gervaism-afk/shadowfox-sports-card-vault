@@ -17,4 +17,5 @@ test('transaction totals distinguish spend, net proceeds and known profit withou
 test('CSV leaves unknown profit empty, quotes text and neutralizes spreadsheet formulas',()=>{
  const csv=transactionCsv([{...sale,card_label:'=HYPERLINK("bad")',cost_cents:null,notes:'two\nlines'}]);
  assert.match(csv,/"'=HYPERLINK\(""bad""\)"/);assert.match(csv,/"19.75","","two\nlines"/);
+ assert.match(transactionCsv([{...sale,fees_cents:3000}]),/"-15.00"/);
 });

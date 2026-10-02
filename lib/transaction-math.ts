@@ -26,6 +26,6 @@ export function transactionTotals(rows: Transaction[]) {
 }
 export function money(cents: number) { return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(cents / 100); }
 export function transactionCsv(rows: Transaction[]) {
-  const cell = (value: unknown) => { let text = String(value ?? ""); if (/^[\s]*[=+\-@]/.test(text)) text = "'" + text; return `"${text.replace(/"/g, '""')}"`; };
+  const cell = (value: unknown) => { let text = String(value ?? ""); if (/^[\s]*[=+\-@]/.test(text) && !/^-\d+(\.\d+)?$/.test(text)) text = "'" + text; return `"${text.replace(/"/g, '""')}"`; };
   return [["Date", "Type", "Card", "Quantity", "Amount CAD", "Fees CAD", "Cost of sold cards CAD", "Net CAD", "Profit CAD", "Notes"], ...rows.map(row => [row.occurred_on, row.kind, row.card_label, row.quantity, (row.amount_cents / 100).toFixed(2), (row.fees_cents / 100).toFixed(2), row.cost_cents === null ? "" : (row.cost_cents / 100).toFixed(2), (transactionNet(row) / 100).toFixed(2), transactionProfit(row) === null ? "" : (transactionProfit(row)! / 100).toFixed(2), row.notes])].map(row => row.map(cell).join(",")).join("\r\n");
 }
