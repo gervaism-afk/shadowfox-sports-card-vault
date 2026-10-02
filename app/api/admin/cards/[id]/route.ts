@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth/require-admin-api';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { cleanupCardImages } from '@/lib/image-cleanup';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminApi(req);
@@ -34,7 +35,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const { id } = await params;
   const supabase = createAdminClient();
-  const { error } = await supabase.from('cards').delete().eq('id', id);
+  const { data, error } = await supabase.from('cards').delete().eq('id', id).select('user_id').maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (data) await cleanupCardImages(supabase, data.user_id, process.env.NEXT_PUBLIC_SUPABASE_URL!).catch(() => {});
   return NextResponse.json({ success: true });
 }

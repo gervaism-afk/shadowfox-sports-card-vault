@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-export const supabase = typeof window === "undefined"
+export const supabase = typeof window === "undefined" || !isSupabaseConfigured()
   ? null
   : createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || "",

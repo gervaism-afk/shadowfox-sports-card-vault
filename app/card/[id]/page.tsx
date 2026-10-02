@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import PageShell from "@/components/PageShell";
 import AuthGate from "@/components/AuthGate";
 import CardForm from "@/components/CardForm";
+import SoldPriceEstimator from "@/components/SoldPriceEstimator";
 import { useParams, useRouter } from "next/navigation";
 import { deleteCard, getCard, saveCard } from "@/lib/storage";
 import { CardRecord } from "@/lib/types";
@@ -15,60 +16,11 @@ export default function CardDetailPage() {
   const router = useRouter();
   const [card, setCard] = useState<CardRecord | null>(null);
   const [status, setStatus] = useState("");
-  const [pricingNote, setPricingNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     getCard(params.id).then(setCard).catch((e) => setStatus(e.message || "Failed to load card"));
   }, [params.id]);
-
-  async function refreshPriceEstimate() {
-    if (!card) return;
-
-    try {
-      setBusy(true);
-      setPricingNote("Refreshing sold-price estimate…");
-
-      const currentCard = card;
-      const query = [
-        currentCard.year,
-        currentCard.player,
-        currentCard.brand,
-        currentCard.set,
-        currentCard.subset,
-        currentCard.cardNumber ? `#${currentCard.cardNumber}` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      const res = await fetch("/api/pricing", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query }),
-      });
-
-      const json = await res.json();
-
-      if (json?.estimateCad) {
-        const next = {
-          ...currentCard,
-          estimatedValueCad: Number(json.estimateCad || 0),
-          updatedAt: new Date().toISOString(),
-        };
-        setCard(next);
-        await saveCard(next);
-        setPricingNote(
-          `Updated from sold listings: $${Number(json.estimateCad).toFixed(2)} CAD (${json.sampleCount || 0} matches)`
-        );
-      } else {
-        setPricingNote("No sold-price estimate found.");
-      }
-    } catch (e: any) {
-      setPricingNote(e.message || "Pricing refresh failed");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (!card) {
     return (
@@ -151,19 +103,14 @@ export default function CardDetailPage() {
               </div>
             </div>
 
-            <CardForm value={card} onChange={setCard} />
+            <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
+              <CardForm value={card} onChange={setCard} showImageFields={false} />
+            </fieldset>
 
             {status ? <div className="helperText" style={{ marginTop: 12 }}>{status}</div> : null}
-            {pricingNote ? (
-              <div className="helperText" style={{ marginTop: 12, color: "#9fe3b0" }}>
-                {pricingNote}
-              </div>
-            ) : null}
+            <SoldPriceEstimator disabled={busy} onApply={(value) => setCard((previous) => previous ? { ...previous, estimatedValueCad: value } : previous)} />
 
             <div className="buttonRow" style={{ marginTop: 16 }}>
-              <button className="btn accent" disabled={busy} onClick={refreshPriceEstimate}>
-                Refresh Sold Price Estimate
-              </button>
               <a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">
                 View Active Listings
               </a>
@@ -175,14 +122,17 @@ export default function CardDetailPage() {
             <div className="buttonRow" style={{ marginTop: 16 }}>
               <button
                 className="btn primary"
+                disabled={busy}
                 onClick={async () => {
                   try {
                     setStatus("Saving changes…");
-                    await saveCard({ ...card, updatedAt: new Date().toISOString() });
+                    setBusy(true);
+                    const saved = await saveCard({ ...card, updatedAt: new Date().toISOString() });
+                    setCard(saved);
                     setStatus("Saved.");
                   } catch (e: any) {
                     setStatus(e.message || "Failed to save");
-                  }
+                  } finally { setBusy(false); }
                 }}
               >
                 Edit / Save
@@ -190,13 +140,15 @@ export default function CardDetailPage() {
 
               <button
                 className="btn danger"
+                disabled={busy}
                 onClick={async () => {
                   try {
+                    setBusy(true);
                     await deleteCard(card.id);
                     router.push("/collection");
                   } catch (e: any) {
                     setStatus(e.message || "Failed to delete");
-                  }
+                  } finally { setBusy(false); }
                 }}
               >
                 Delete

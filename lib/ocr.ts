@@ -17,7 +17,9 @@ const TEAMS = [
 ];
 
 function esc(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
-function findFirst(text: string, terms: string[]) { return terms.find((t) => new RegExp(`\\b${esc(t)}\\b`, "i").test(text)) || ""; }
+function findFirst(text: string, terms: string[]) {
+  return [...terms].sort((a, b) => b.length - a.length).find((term) => new RegExp(`\\b${esc(term)}\\b`, "i").test(text)) || "";
+}
 function pickSport(text: string, brand: string): "Hockey" | "Baseball" | undefined {
   if (/NHL|Young Guns|O-Pee-Chee|SP Authentic|SPx|Artifacts|Parkhurst|Future Watch|UD Canvas|Black Diamond/i.test(text)) return "Hockey";
   if (/MLB|Bowman|Topps|Donruss|Chrome|Baseball|Stadium Club|Finest|Allen & Ginter|Heritage/i.test(text)) return "Baseball";
@@ -28,20 +30,28 @@ function pickSport(text: string, brand: string): "Hockey" | "Baseball" | undefin
 function pickYear(text: string) { return (text.match(/\b(19\d{2}|20\d{2})\b/) || [])[0] || ""; }
 function pickCardNumber(text: string) {
   return (
-    (text.match(/(?:#|No\.?\s*)([A-Z]{0,3}\d{1,4})\b/i) || [])[1] ||
+    (text.match(/(?:#\s*|No\.?\s*)([A-Z]{0,3}\d{1,4})\b/i) || [])[1] ||
     (text.match(/\bCard\s*([A-Z]{0,3}\d{1,4})\b/i) || [])[1] || ""
   );
 }
 function pickSerial(text: string) { return (text.match(/\b\d{1,3}\s*\/\s*\d{2,4}\b/) || [])[0] || ""; }
-function pickGrade(text: string) { return (text.match(/\b(10|9\.5|9|8\.5|8|7\.5|7)\b/) || [])[1] || ""; }
+function pickGrade(text: string) {
+  const label = text.match(/\b(?:PSA|BGS|SGC|CGC)\s*(?:GEM\s*MINT\s*|MINT\s*|GRADE\s*)?(10|9\.5|9|8\.5|8|7\.5|7)\b/i);
+  return label?.[1] || "";
+}
 function pickPlayer(text: string, brand: string, team: string, subset: string, parallel: string) {
-  const blacklist = new Set(
-    [...HOCKEY_BRANDS, ...BASEBALL_BRANDS, ...SET_TERMS, ...PARALLEL_TERMS, team, brand, subset, parallel, "rookie", "authentic", "baseball", "hockey", "series", "card"]
-      .filter(Boolean)
-      .map((x) => x.toLowerCase())
-  );
-  const matches = Array.from(text.matchAll(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g)).map((m) => m[1]);
-  return matches.find((m) => !blacklist.has(m.toLowerCase())) || "";
+  const ignore = [...HOCKEY_BRANDS, ...BASEBALL_BRANDS, ...SET_TERMS, ...PARALLEL_TERMS, team, brand, subset, parallel,
+    "rookie", "authentic", "baseball", "hockey", "series", "card", "NHL", "MLB", "PSA", "BGS", "SGC", "CGC", "GEM MINT"]
+    .filter(Boolean);
+  for (const line of text.split(/\r?\n/)) {
+    let candidate = line;
+    for (const term of ignore.sort((a, b) => b.length - a.length)) candidate = candidate.replace(new RegExp(`\\b${esc(term)}\\b`, "gi"), " ");
+    candidate = candidate.replace(/[#\d].*$/, "").trim();
+    if (!/^[A-Za-zÀ-ž][A-Za-zÀ-ž'’-]+(?:\s+[A-Za-zÀ-ž][A-Za-zÀ-ž'’-]+){1,3}$/.test(candidate)) continue;
+    if (candidate === candidate.toUpperCase()) return candidate.toLowerCase().replace(/(?:^|[\s'-])[a-z]/g, (letter) => letter.toUpperCase());
+    return candidate;
+  }
+  return "";
 }
 export function parseOcrText(text: string): OcrGuess {
   const brand = findFirst(text, [...HOCKEY_BRANDS, ...BASEBALL_BRANDS]);
@@ -59,7 +69,7 @@ export function parseOcrText(text: string): OcrGuess {
     parallel: parallel || undefined,
     cardNumber: pickCardNumber(text) || undefined,
     team: team || undefined,
-    rookie: /\bRC\b|rookie/i.test(text),
+    rookie: /\bRC\b|rookie|Young Guns|Future Watch/i.test(text),
     autograph: /autograph|auto\b|signed/i.test(text),
     relicPatch: /relic|patch|jersey|memorabilia/i.test(text),
     serialNumber: pickSerial(text) || undefined,

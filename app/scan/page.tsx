@@ -1,104 +1,147 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import PageShell from "@/components/PageShell";
 import AuthGate from "@/components/AuthGate";
 import CardForm from "@/components/CardForm";
+import SoldPriceEstimator from "@/components/SoldPriceEstimator";
 import { emptyCard } from "@/lib/defaults";
-import { CardRecord } from "@/lib/types";
+import type { CardRecord } from "@/lib/types";
 import { findDuplicate, increaseQuantity, saveCard } from "@/lib/storage";
-import { fileToDataUrl } from "@/lib/utils";
+import { prepareCardImage } from "@/lib/images";
+import { recognizeCardImage } from "@/lib/ocr-browser";
 import { computeConfidence, parseOcrText } from "@/lib/ocr";
+import { applyOcrGuess } from "@/lib/scan";
+import { supabase } from "@/lib/supabase";
+import { identityFields, parseIdentification } from "@/lib/ai-identification";
 import { ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
-import { useRouter } from "next/navigation";
 
 export default function ScanPage() {
-  const [card, setCard] = useState<CardRecord>(() => emptyCard());
-  const [status, setStatus] = useState("Preview stays visible for upload or camera/upload.");
+  const [card, setCard] = useState<CardRecord>(emptyCard);
+  const [status, setStatus] = useState("Upload a clear photo of the card front to read its text.");
+  const [aiWarnings, setAiWarnings] = useState<string[]>([]);
   const [ocrText, setOcrText] = useState("");
   const [confidence, setConfidence] = useState<number | null>(null);
-  const [duplicateMsg, setDuplicateMsg] = useState("");
-  const [duplicateCardId, setDuplicateCardId] = useState("");
-  const [activeLink, setActiveLink] = useState("");
-  const [soldLink, setSoldLink] = useState("");
-  const [pricingNote, setPricingNote] = useState("");
+  const [duplicate, setDuplicate] = useState<CardRecord | null>(null);
   const [busy, setBusy] = useState(false);
+  const running = useRef(false);
+  const controller = useRef<AbortController | null>(null);
   const router = useRouter();
+  useEffect(() => () => { controller.current?.abort(); }, []);
 
-  async function runOcr(file: File, dataUrl: string) {
-    setStatus("Running OCR…");
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/ocr", { method: "POST", body: fd });
-      const json = await res.json();
-      const text = String(json?.text || "");
-      setOcrText(text);
-      const parsed = parseOcrText(text);
-      const conf = computeConfidence(parsed, text);
-      setConfidence(conf);
-      const nextCard: CardRecord = { ...card, frontImage: dataUrl, sport: parsed.sport || card.sport, player: card.player || parsed.player || "", year: card.year || parsed.year || "", brand: card.brand || parsed.brand || "", subset: card.subset || parsed.subset || "", cardNumber: card.cardNumber || parsed.cardNumber || "", team: card.team || parsed.team || "", rookie: parsed.rookie ?? card.rookie, autograph: parsed.autograph ?? card.autograph, relicPatch: parsed.relicPatch ?? card.relicPatch, serialNumber: card.serialNumber || parsed.serialNumber || "", gradingCompany: (card.gradingCompany || (parsed.gradingCompany as any) || card.gradingCompany), grade: card.grade || parsed.grade || "", updatedAt: new Date().toISOString() };
-      setCard(nextCard);
-      const match = await findDuplicate(nextCard);
-      setDuplicateCardId(match?.id || "");
-      setDuplicateMsg(match ? `Possible duplicate found: ${match.player} ${match.year} ${match.brand} #${match.cardNumber}. Choose whether to add quantity or save separately.` : "");
-      setActiveLink(ebayActiveUrl(nextCard));
-      setSoldLink(ebaySoldUrl(nextCard));
-      try {
-        const priceRes = await fetch("/api/pricing", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: [nextCard.year, nextCard.player, nextCard.brand, nextCard.set, nextCard.subset, nextCard.cardNumber ? `#${nextCard.cardNumber}` : ""].filter(Boolean).join(" ") }) });
-        const priceJson = await priceRes.json();
-        if (priceJson?.estimateCad) {
-          setCard((prev) => ({ ...prev, estimatedValueCad: Number(priceJson.estimateCad || 0) }));
-          setPricingNote(`Estimated value auto-filled from sold listings: $${Number(priceJson.estimateCad).toFixed(2)} CAD (${priceJson.sampleCount || 0} matches)`);
-        } else setPricingNote("No sold-price estimate found automatically.");
-      } catch { setPricingNote("Pricing estimate could not be loaded automatically."); }
-      setStatus(conf < 0.45 ? "OCR complete with low confidence. Please review fields carefully." : "OCR complete. Review fields, then save.");
-    } catch (e: any) { setStatus(e?.message || "OCR failed. You can still fill fields manually."); }
+  async function identify(value: CardRecord, signal: AbortSignal) {
+    setStatus("AI is identifying the card…");
+    const { data } = await supabase!.auth.getSession();
+    const response = await fetch("/api/identify", {
+      method: "POST", signal,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token || ""}` },
+      body: JSON.stringify({ frontImage: value.frontImage, backImage: value.backImage })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "AI identification is unavailable.");
+    const identification = parseIdentification(result);
+    if (signal.aborted) return;
+    const defaults = emptyCard();
+    const cleared = Object.fromEntries(identityFields.map(key => [key, defaults[key]]));
+    setCard({ ...value, ...cleared, ...identification.fields, estimatedValueCad: 0 });
+    setOcrText(identification.evidence); setAiWarnings(identification.warnings); setConfidence(null); setDuplicate(null);
+    setStatus("AI details filled in. Review the match and edit any field before saving.");
   }
 
-  return (
-    <AuthGate>
-      <PageShell>
-        <section className="vaultHero">
-          <div>
-            <div className="vaultEyebrow">Scan Workflow</div>
-            <h1 className="vaultTitle">Scan cards into your ShadowFox vault.</h1>
-            <p className="vaultText">Use upload or camera mode, run OCR, check for duplicates, and save with confidence.</p>
-          </div>
-          <div className="vaultButtonRow">
-            <button className="sfSecondaryBtn" onClick={() => router.push("/manual")}>Add Manually</button>
-            <button className="sfSecondaryBtn" onClick={() => router.push("/collection")}>View Collection</button>
-          </div>
-        </section>
+  async function rescan() {
+    if (running.current || !card.frontImage) return;
+    running.current = true; setBusy(true);
+    const task = new AbortController(); controller.current = task;
+    try { await identify(card, task.signal); }
+    catch (error: any) { if (!task.signal.aborted) setStatus(error.message); }
+    finally { running.current = false; if (!task.signal.aborted) setBusy(false); }
+  }
 
-        <div className="layout2">
-          <section className="panel">
-            <div className="buttonRow">
-              <label className="btn primary">Upload<input hidden type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; const data = await fileToDataUrl(file); setCard((prev) => ({ ...prev, frontImage: data })); await runOcr(file, data); }} /></label>
-              <label className="btn accent">Camera/Upload<input hidden type="file" accept="image/*" capture="environment" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; const data = await fileToDataUrl(file); setCard((prev) => ({ ...prev, frontImage: data })); await runOcr(file, data); }} /></label>
-              <button className="btn ghost" onClick={() => router.push("/manual")}>Add Manually</button>
-              <label className="btn ghost">Add Back Image<input hidden type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; const data = await fileToDataUrl(file); setCard((prev) => ({ ...prev, backImage: data })); setStatus("Back image loaded."); }} /></label>
-            </div>
-            <div className="helperText">{status}</div>
-            <div className="layout2" style={{ marginTop: 16 }}>
-              <div className="previewCard cardFrame">{card.frontImage ? <img src={card.frontImage} alt="Front preview" /> : <span>Front preview</span>}</div>
-              <div className="previewCard cardFrame">{card.backImage ? <img src={card.backImage} alt="Back preview" /> : <span>Back preview</span>}</div>
-            </div>
-          </section>
+  async function upload(file: File, back = false) {
+    if (running.current) return;
+    running.current = true;
+    setBusy(true);
+    const task = new AbortController();
+    controller.current = task;
+    try {
+      setStatus("Preparing image…");
+      const image = await prepareCardImage(file);
+      if (task.signal.aborted) return;
+      if (back) {
+        setCard((previous) => ({ ...previous, backImage: image }));
+        setStatus("Back image loaded. Select Identify Again to use both photos; this will replace detected card details.");
+        return;
+      }
+      // A new front photo starts a new card; no fields carry over from the last scan.
+      const fresh = { ...emptyCard(), frontImage: image };
+      setCard(fresh); setAiWarnings([]); setOcrText(""); setConfidence(null); setDuplicate(null);
+      let aiError = "";
+      try { await identify(fresh, task.signal); return; }
+      catch (error: any) { if (task.signal.aborted) return; aiError = error.message || "AI identification is unavailable."; }
+      const text = await recognizeCardImage(image, (message) => { if (!task.signal.aborted) setStatus(message); }, task.signal);
+      if (task.signal.aborted) return;
+      setOcrText(text);
+      const guess = parseOcrText(text);
+      const next = applyOcrGuess(fresh, guess);
+      setCard(next);
+      const score = computeConfidence(guess, text);
+      setConfidence(score);
+      setAiWarnings([aiError, "Local text reading was used. Card identity has not been verified by AI."]);
+      setStatus(!text ? "No text found. Try a sharper photo or enter the fields below." : score < 0.45 ? "Some details could not be read. Review and complete the fields before saving." : "Text read. Review all fields before saving.");
+    } catch (error: any) {
+      if (!task.signal.aborted) setStatus(error.message || "Could not read this image. You can enter the fields below.");
+    } finally {
+      running.current = false;
+      if (!task.signal.aborted) setBusy(false);
+    }
+  }
 
-          <section className="panel">
-            <CardForm value={card} onChange={setCard} showImageFields={false} />
-            <div className="fieldBlockWide" style={{ marginTop: 16 }}><label className="label">OCR Text</label><textarea className="input textarea" value={ocrText} readOnly placeholder="Detected text will appear here after upload/camera." /></div>
-            {confidence !== null ? <div className="helperText" style={{ marginTop: 12 }}>OCR Confidence: <strong>{Math.round(confidence * 100)}%</strong></div> : null}
-            {duplicateMsg ? <div className="helperText" style={{ marginTop: 8, color: "#ffd18f" }}>{duplicateMsg}</div> : null}
-            {pricingNote ? <div className="helperText" style={{ marginTop: 8, color: "#9fe3b0" }}>{pricingNote}</div> : null}
-            {(activeLink || soldLink) ? <div className="buttonRow" style={{ marginTop: 12 }}>{activeLink ? <a className="btn ghost" href={activeLink} target="_blank" rel="noreferrer">View Active Listings</a> : null}{soldLink ? <a className="btn ghost" href={soldLink} target="_blank" rel="noreferrer">View Sold Listings</a> : null}</div> : null}
-            <div className="buttonRow" style={{ marginTop: 16 }}>
-              <button className="btn primary" disabled={busy} onClick={async () => { try { setBusy(true); await saveCard({ ...card, updatedAt: new Date().toISOString() }); router.push("/collection"); } catch (e: any) { setStatus(e.message || "Failed to save"); } finally { setBusy(false); } }}>Save as New Card</button>
-              {duplicateCardId ? <button className="btn ghost" disabled={busy} onClick={async () => { try { setBusy(true); await increaseQuantity(duplicateCardId, card.quantity || 1); router.push("/collection"); } catch (e: any) { setStatus(e.message || "Failed to increase quantity"); } finally { setBusy(false); } }}>Add to Existing Quantity</button> : null}
-            </div>
-          </section>
-        </div>
-      </PageShell>
-    </AuthGate>
-  );
+  async function save(addQuantity = false) {
+    if (running.current) return;
+    running.current = true; setBusy(true);
+    try {
+      if (!card.player.trim()) throw new Error("Enter the player's name before saving.");
+      if (addQuantity && duplicate) await increaseQuantity(duplicate.id, card.quantity);
+      else {
+        if (!duplicate) {
+          const match = await findDuplicate(card);
+          if (match) { setDuplicate(match); setStatus("A matching card is already in your vault. Save separately or add its quantity."); return; }
+        }
+        await saveCard(card);
+      }
+      router.push("/collection");
+    } catch (error: any) { setStatus(error.message || "Could not save card."); }
+    finally { running.current = false; setBusy(false); }
+  }
+
+  return <AuthGate><PageShell title="Scan Cards">
+    <section className="vaultHero">
+      <div><div className="vaultEyebrow">Scan Workflow</div><h1 className="vaultTitle">Scan cards into your ShadowFox vault.</h1><p className="vaultText">Upload a photo for AI identification, review and edit the details, then save your card. A new front photo starts a new card.</p></div>
+      <div className="vaultButtonRow"><button className="sfSecondaryBtn" onClick={() => router.push("/manual")}>Add Manually</button><button className="sfSecondaryBtn" onClick={() => router.push("/collection")}>View Collection</button></div>
+    </section>
+    <div className="layout2" style={{ alignItems: "start" }}>
+      <section className="panel">
+        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
+          <div className="buttonRow">
+            <label className="btn primary">Upload Front<input aria-label="Upload front image" hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
+            <label className="btn accent">Camera<input aria-label="Take card photo" hidden type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
+            <label className="btn ghost">Add Back Image<input aria-label="Upload back image" hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
+            <button type="button" className="btn ghost" disabled={!card.frontImage} onClick={() => void rescan()}>Identify Again</button>
+          </div>
+        </fieldset>
+        <p className="helperText" role="status" aria-live="polite">{status}</p>
+        <div className="layout2" style={{ marginTop: 16 }}><div className="previewCard cardFrame">{card.frontImage ? <img src={card.frontImage} alt="Front preview" /> : <span>Front preview</span>}</div><div className="previewCard cardFrame">{card.backImage ? <img src={card.backImage} alt="Back preview" /> : <span>Back preview</span>}</div></div>
+      </section>
+      <section className="panel">
+        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={(next) => { setCard(next); setDuplicate(null); }} showImageFields={false} /></fieldset>
+        <div className="fieldBlockWide" style={{ marginTop: 16 }}><label className="label" htmlFor="ocr-text">Detected text</label><textarea id="ocr-text" className="input textarea" value={ocrText} readOnly placeholder="Text detected in your photo appears here." /></div>
+        {aiWarnings.length ? <ul className="helperText">{aiWarnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
+        {confidence !== null ? <p className="helperText">Field completeness: {Math.round(confidence * 100)}% — review the detected details.</p> : null}
+        <div className="buttonRow" style={{ marginTop: 12 }}><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
+        <SoldPriceEstimator disabled={busy} onApply={(value) => setCard((previous) => ({ ...previous, estimatedValueCad: value }))} />
+        {duplicate ? <p className="helperText">Matching card: {duplicate.player} {duplicate.year} {duplicate.brand} #{duplicate.cardNumber}.</p> : null}
+        <div className="buttonRow" style={{ marginTop: 16 }}><button className="btn primary" disabled={busy} onClick={() => save()}>{duplicate ? "Save Separately" : "Save Card"}</button>{duplicate ? <button className="btn ghost" disabled={busy} onClick={() => save(true)}>Add to Existing Quantity</button> : null}</div>
+      </section>
+    </div>
+  </PageShell></AuthGate>;
 }

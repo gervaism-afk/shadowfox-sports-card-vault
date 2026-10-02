@@ -13,6 +13,8 @@ export function duplicateKey(card: CardRecord) {
     card.serialNumber.trim().toLowerCase(),
     card.gradingCompany.trim().toLowerCase(),
     card.grade.trim().toLowerCase(),
+    card.team.trim().toLowerCase(),
+    String(card.rookie), String(card.autograph), String(card.relicPatch),
   ].join("|");
 }
 

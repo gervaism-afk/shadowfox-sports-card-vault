@@ -10,7 +10,7 @@ export default function AppHeader() {
 
   async function handleLogout() {
     try {
-      await supabase.auth.signOut();
+      if (supabase) await supabase.auth.signOut();
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {

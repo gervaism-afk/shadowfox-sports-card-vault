@@ -5,18 +5,35 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "node tests/security.mjs && tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "predev": "node scripts/prepare-ocr.mjs",
+    "prebuild": "node scripts/prepare-ocr.mjs",
+    "test:browser": "playwright test"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1",
-    "next": "14.2.35",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "@supabase/supabase-js": "2.117.2",
+    "@tesseract.js-data/eng": "1.0.0",
+    "next": "15.5.27",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "server-only": "0.0.1",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@playwright/test": "1.63.0",
     "@types/node": "^20.14.10",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
+    "tsx": "4.23.15",
     "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "postcss": "8.5.23"
   }
 }

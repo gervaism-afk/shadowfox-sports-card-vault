@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth/require-admin-api';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { fetchAllRows } from '@/lib/pagination';
 
 export async function GET(req: Request) {
   const auth = await requireAdminApi(req);
@@ -10,7 +11,10 @@ export async function GET(req: Request) {
   const search = searchParams.get('search')?.trim() ?? '';
   const role = searchParams.get('role')?.trim() ?? '';
   const page = Number(searchParams.get('page') ?? '1');
-  const pageSize = Math.min(Number(searchParams.get('pageSize') ?? '20'), 100);
+  const pageSize = Number(searchParams.get('pageSize') ?? '20');
+  if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || (role && !['user', 'admin'].includes(role))) {
+    return NextResponse.json({ error: 'Invalid pagination or role' }, { status: 400 });
+  }
   const userId = searchParams.get('userId');
   const includeCards = searchParams.get('includeCards') === 'true';
   const includeStats = searchParams.get('includeStats') === 'true';
@@ -20,23 +24,25 @@ export async function GET(req: Request) {
   const supabase = createAdminClient();
 
   if (includeCards && userId) {
-    const { data, error } = await supabase
-      .from('cards')
-      .select('id, sport, player, year, brand, set_name, card_number, team, quantity, estimated_value_cad, notes')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ cards: data ?? [] });
+    try {
+      const cards = await fetchAllRows((from, to) => supabase.from('cards')
+        .select('id, sport, player, year, brand, set_name, card_number, team, quantity, estimated_value_cad, notes')
+        .eq('user_id', userId).order('created_at', { ascending: false }).order('id').range(from, to));
+      return NextResponse.json({ cards });
+    } catch { return NextResponse.json({ error: 'Could not load cards' }, { status: 500 }); }
   }
 
   let usersQuery = supabase
     .from('profiles')
     .select('id, username, email, role, created_at', { count: 'exact' })
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false }).order('id')
     .range(from, to);
 
   if (role) usersQuery = usersQuery.eq('role', role);
-  if (search) usersQuery = usersQuery.or(`username.ilike.%${search}%,email.ilike.%${search}%`);
+  if (search) {
+    const pattern = `%${search}%`.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    usersQuery = usersQuery.or(`username.ilike."${pattern}",email.ilike."${pattern}"`);
+  }
 
   const { data: users, error: usersError, count } = await usersQuery;
   if (usersError) return NextResponse.json({ error: usersError.message }, { status: 500 });
@@ -44,11 +50,11 @@ export async function GET(req: Request) {
   const userIds = (users ?? []).map((u: any) => u.id);
   let aggregatesByUser = new Map();
   if (userIds.length) {
-    const { data: cardsAgg, error: cardsAggError } = await supabase
-      .from('cards')
-      .select('user_id, quantity, estimated_value_cad')
-      .in('user_id', userIds);
-    if (cardsAggError) return NextResponse.json({ error: cardsAggError.message }, { status: 500 });
+    let cardsAgg: any[];
+    try {
+      cardsAgg = await fetchAllRows((from, to) => supabase.from('cards')
+        .select('user_id, quantity, estimated_value_cad').in('user_id', userIds).order('id').range(from, to));
+    } catch { return NextResponse.json({ error: 'Could not load collection totals' }, { status: 500 }); }
     for (const row of cardsAgg ?? []) {
       const prev = aggregatesByUser.get(row.user_id) ?? { card_count: 0, total_estimated_value: 0 };
       prev.card_count += Number(row.quantity || 1);
@@ -58,10 +64,17 @@ export async function GET(req: Request) {
   }
 
   if (includeStats) {
-    const [{ count: totalUsers }, { data: allCards }] = await Promise.all([
+    let totalUsers: number;
+    let allCards: any[];
+    try {
+    const [userCount, cardRows] = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
-      supabase.from('cards').select('quantity, estimated_value_cad')
+      fetchAllRows((from, to) => supabase.from('cards').select('quantity, estimated_value_cad').order('id').range(from, to))
     ]);
+    if (userCount.error) throw userCount.error;
+    totalUsers = userCount.count || 0;
+    allCards = cardRows;
+    } catch { return NextResponse.json({ error: 'Could not load portfolio totals' }, { status: 500 }); }
     const totalCards = (allCards ?? []).reduce((sum, row: any) => sum + Number(row.quantity || 1), 0);
     const totalValue = (allCards ?? []).reduce((sum, row: any) => sum + Number(row.estimated_value_cad || 0) * Number(row.quantity || 1), 0);
     return NextResponse.json({
