@@ -1,8 +1,11 @@
-
 "use client";
+
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "@/components/PageShell";
 import AuthGate from "@/components/AuthGate";
+import { useAuth } from "@/components/AuthProvider";
+import VaultIcon from "@/components/VaultIcon";
 import CollectionControls from "@/components/CollectionControls";
 import CollectionTable from "@/components/CollectionTable";
 import CollectionGrid from "@/components/CollectionGrid";
@@ -13,16 +16,30 @@ import { filterCards, sortCards, totalCards, totalValue, uniqueCards } from "@/l
 import { PAGE_CONTENT_DEFAULTS } from "@/lib/content/defaults";
 
 type PageContent = typeof PAGE_CONTENT_DEFAULTS.collection;
+const cad = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
 
 export default function CollectionPage() {
+  const { user } = useAuth();
   const [cards, setCards] = useState<CardRecord[]>([]);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [sortKey, setSortKey] = useState<SortKey>("newest");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [error, setError] = useState("");
+  const [cardsLoading, setCardsLoading] = useState(true);
   const [content, setContent] = useState<PageContent>(PAGE_CONTENT_DEFAULTS.collection);
 
-  useEffect(() => { loadCards().then(setCards).catch((e) => setError(e.message || "Failed to load collection")); }, []);
+  useEffect(() => {
+    let active = true;
+    setCards([]);
+    setError("");
+    setCardsLoading(true);
+    if (user) {
+      loadCards().then((next) => { if (active) setCards(next); })
+        .catch((e) => { if (active) setError(e.message || "Failed to load collection"); })
+        .finally(() => { if (active) setCardsLoading(false); });
+    }
+    return () => { active = false; };
+  }, [user?.id]);
   useEffect(() => {
     fetch("/api/content/collection", { cache: "no-store" })
       .then((r) => r.json())
@@ -30,30 +47,42 @@ export default function CollectionPage() {
       .catch(() => {});
   }, []);
   const filtered = useMemo(() => sortCards(filterCards(cards, filters), sortKey), [cards, filters, sortKey]);
+  const valuedEntries = filtered.filter((card) => Number(card.estimatedValueCad) > 0).length;
+  const hasFilters = Object.values(filters).some(Boolean);
 
-  const exportJson = () => { const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "shadowfox-vault-export.json"; a.click(); URL.revokeObjectURL(url); };
-  const exportCsv = () => { const headers = ["sport","player","year","brand","set","subset","cardNumber","team","rookie","autograph","relicPatch","serialNumber","parallel","gradingCompany","grade","quantity","estimatedValueCad","notes"]; const rows = filtered.map((c) => headers.map((h) => `"${String((c as any)[h] ?? "").replaceAll('"', '""')}"`).join(",")); const csv = [headers.join(","), ...rows].join("\n"); const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "shadowfox-vault-export.csv"; a.click(); URL.revokeObjectURL(url); };
+  const download = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const exportJson = () => download(new Blob([JSON.stringify(filtered, null, 2)], { type: "application/json" }), "shadowfox-vault-export.json");
+  const exportCsv = () => {
+    const headers = ["sport", "player", "year", "brand", "set", "subset", "cardNumber", "team", "rookie", "autograph", "relicPatch", "serialNumber", "parallel", "gradingCompany", "grade", "quantity", "estimatedValueCad", "notes"] as const;
+    const rows = filtered.map((card) => headers.map((header) => `"${String(card[header] ?? "").replaceAll('"', '""')}"`).join(","));
+    download(new Blob([[headers.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8" }), "shadowfox-vault-export.csv");
+  };
 
   return (
     <AuthGate>
-      <PageShell title={content.title}>
-        <div className="collectionShell">
-          {error ? <section className="panel" style={{ marginBottom: 16 }}>{error}</section> : null}
-          <section className="sfHeroMini" style={{ marginBottom: 18 }}>
-            <div>
-              <h1 className="sfPageHeading">{content.title}</h1>
-              <p className="sfPageIntro">{content.subtitle}</p>
-            </div>
-          </section>
-          <section className="heroGrid">
-            <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Total Cards</div><div className="kpiValue">{totalCards(filtered)}</div></div>
-            <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Unique Cards</div><div className="kpiValue">{uniqueCards(filtered)}</div></div>
-            <div className="kpiCard hoverLift fadeInUp"><div className="kpiLabel">Estimated Collection Value</div><div className="kpiValue">${totalValue(filtered).toFixed(2)} CAD</div></div>
-          </section>
-          <section className="premiumControls"><div className="buttonRow" style={{ marginBottom: 0 }}><button className="btn" onClick={exportJson}>{content.exportJsonLabel}</button><button className="btn" onClick={exportCsv}>{content.exportCsvLabel}</button></div></section>
-          <CollectionControls filters={filters} setFilters={setFilters} sortKey={sortKey} setSortKey={setSortKey} viewMode={viewMode} setViewMode={setViewMode} />
-          {!filtered.length ? <section className="softPanel emptyState fadeInUp"><div className="emptyStateIcon softPulse">📚</div><div className="emptyStateTitle">{content.emptyTitle}</div><div className="emptyStateText">{content.emptyText}</div></section> : viewMode === "list" ? <CollectionTable cards={filtered} /> : <CollectionGrid cards={filtered} />}
+      <PageShell>
+        <section className="vaultWelcome">
+          <div><div className="vaultEyebrow">Built around your collection</div><h1 className="vaultDisplayTitle">{content.title}<br /><em>Your story.</em></h1><p className="vaultWelcomeCopy">{content.subtitle}</p></div>
+          {!cardsLoading && !error ? <div className="vaultWelcomeStats" aria-label="Collection totals">
+            <div className="vaultStat"><strong className="kpiValue">{totalCards(filtered)}</strong><span>Total cards</span></div>
+            <div className="vaultStat"><strong>{uniqueCards(filtered)}</strong><span>Unique cards</span></div>
+          </div> : null}
+        </section>
+        {error ? <section className="panel" role="alert">{error}</section> : null}
+        <CollectionControls filters={filters} setFilters={setFilters} sortKey={sortKey} setSortKey={setSortKey} viewMode={viewMode} setViewMode={setViewMode} />
+        <div className="vaultSectionHeading">
+          <div><h2>{hasFilters ? "Matching cards" : "All cards"}</h2><p className="vaultResultsLabel">{cardsLoading ? "Loading your collection…" : `${filtered.length} ${filtered.length === 1 ? "entry" : "entries"}${hasFilters ? ` of ${cards.length}` : ""} in your vault`}</p></div>
+          <details className="vaultExport"><summary><VaultIcon name="arrow" size={16} />Export</summary><div><button type="button" onClick={exportCsv} disabled={cardsLoading || !!error}>{content.exportCsvLabel}</button><button type="button" onClick={exportJson} disabled={cardsLoading || !!error}>{content.exportJsonLabel}</button></div></details>
         </div>
+        {!error && (cardsLoading ? <section className="panel" role="status">Loading cards…</section> : !filtered.length ? <section className="vaultEmptyState"><VaultIcon name="binder" size={32} /><h2>{content.emptyTitle}</h2><p>{content.emptyText}</p>{hasFilters ? <button className="btn secondary" type="button" onClick={() => setFilters({ ...defaultFilters })}>Clear filters</button> : <Link className="btn primary" href="/scan"><VaultIcon name="scan" size={18} />Scan your first card</Link>}</section> : viewMode === "list" ? <CollectionTable cards={filtered} /> : <CollectionGrid cards={filtered} />)}
+        {!cardsLoading && !error && filtered.length > 0 ? <footer className="vaultGalleryFooter"><span>{valuedEntries ? `Saved estimates: ${cad.format(totalValue(filtered))} CAD · ${valuedEntries} of ${filtered.length} entries valued` : "No estimates saved yet."}</span><Link href="/analytics">View insights <VaultIcon name="arrow" size={14} /></Link></footer> : null}
       </PageShell>
     </AuthGate>
   );

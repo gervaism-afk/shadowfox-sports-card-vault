@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import PageShell from "@/components/PageShell";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function ResetPasswordPage() {
+  const id = useId();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [status, setStatus] = useState("");
@@ -35,14 +36,14 @@ export default function ResetPasswordPage() {
         <div className="helperText" style={{ marginBottom: 16 }}>
           Enter your new password below after opening the reset link from your email.
         </div>
-        <div className="authForm">
-          <label className="label">New Password</label>
-          <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="minimum 6 characters" />
-          <label className="label">Confirm New Password</label>
-          <input className="input" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="re-enter password" />
-          <button className="btn primary" disabled={busy} onClick={handleUpdatePassword}>Update Password</button>
-        </div>
-        {status ? <div className="helperText" style={{ marginTop: 12 }}>{status}</div> : null}
+        <form className="authForm" onSubmit={(event) => { event.preventDefault(); void handleUpdatePassword(); }}>
+          <label className="label" htmlFor={`${id}-password`}>New Password</label>
+          <input id={`${id}-password`} className="input" type="password" autoComplete="new-password" minLength={6} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
+          <label className="label" htmlFor={`${id}-confirm`}>Confirm New Password</label>
+          <input id={`${id}-confirm`} className="input" type="password" autoComplete="new-password" minLength={6} required value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Re-enter password" />
+          <button className="btn primary" type="submit" disabled={busy}>Update Password</button>
+        </form>
+        {status ? <div className="helperText" role="status" style={{ marginTop: 12 }}>{status}</div> : null}
       </section>
     </PageShell>
   );

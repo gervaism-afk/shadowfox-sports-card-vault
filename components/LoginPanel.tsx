@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function LoginPanel() {
+  const id = useId();
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [identifier, setIdentifier] = useState("");
   const [username, setUsername] = useState("");
@@ -76,40 +77,40 @@ export default function LoginPanel() {
 
   return (
     <section className="authCard premiumLogin">
-      <div className="authLoginBadge">🔒 Private Multi-User Access</div>
+      <div className="authLoginBadge">Your private vault</div>
       <div className="authTabs">
-        <button className={mode === "login" ? "authTab active" : "authTab"} onClick={() => setMode("login")}>Log In</button>
-        <button className={mode === "signup" ? "authTab active" : "authTab"} onClick={() => setMode("signup")}>Create Account</button>
-        <button className={mode === "forgot" ? "authTab active" : "authTab"} onClick={() => setMode("forgot")}>Forgot Password</button>
+        <button type="button" aria-pressed={mode === "login"} className={mode === "login" ? "authTab active" : "authTab"} onClick={() => setMode("login")}>Log In</button>
+        <button type="button" aria-pressed={mode === "signup"} className={mode === "signup" ? "authTab active" : "authTab"} onClick={() => setMode("signup")}>Create Account</button>
+        <button type="button" aria-pressed={mode === "forgot"} className={mode === "forgot" ? "authTab active" : "authTab"} onClick={() => setMode("forgot")}>Forgot Password</button>
       </div>
 
       {mode === "login" ? (
-        <div className="authForm">
-          <label className="label">Email</label>
-          <input className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} type="email" placeholder="email" />
-          <label className="label">Password</label>
-          <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password" />
-          <button className="btn primary" disabled={busy} onClick={handleLogin}>Log In</button>
-        </div>
+        <form className="authForm" onSubmit={(event) => { event.preventDefault(); void handleLogin(); }}>
+          <label className="label" htmlFor={`${id}-email`}>Email</label>
+          <input id={`${id}-email`} className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} type="email" autoComplete="email" required placeholder="you@example.com" />
+          <label className="label" htmlFor={`${id}-password`}>Password</label>
+          <input id={`${id}-password`} className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" />
+          <button type="submit" className="btn primary" disabled={busy}>Log In</button>
+        </form>
       ) : mode === "signup" ? (
-        <div className="authForm">
-          <label className="label">Username</label>
-          <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="choose a username" />
-          <label className="label">Email</label>
-          <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" />
-          <label className="label">Password</label>
-          <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="minimum 6 characters" />
-          <button className="btn primary" disabled={busy} onClick={handleSignup}>Create Account</button>
-        </div>
+        <form className="authForm" onSubmit={(event) => { event.preventDefault(); void handleSignup(); }}>
+          <label className="label" htmlFor={`${id}-username`}>Username</label>
+          <input id={`${id}-username`} className="input" autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Choose a username" />
+          <label className="label" htmlFor={`${id}-email`}>Email</label>
+          <input id={`${id}-email`} className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+          <label className="label" htmlFor={`${id}-password`}>Password</label>
+          <input id={`${id}-password`} className="input" type="password" autoComplete="new-password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
+          <button type="submit" className="btn primary" disabled={busy}>Create Account</button>
+        </form>
       ) : (
-        <div className="authForm">
-          <label className="label">Email</label>
-          <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="enter your account email" />
-          <button className="btn primary" disabled={busy} onClick={handleForgotPassword}>Send Reset Link</button>
-        </div>
+        <form className="authForm" onSubmit={(event) => { event.preventDefault(); void handleForgotPassword(); }}>
+          <label className="label" htmlFor={`${id}-email`}>Email</label>
+          <input id={`${id}-email`} className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your account email" />
+          <button type="submit" className="btn primary" disabled={busy}>Send Reset Link</button>
+        </form>
       )}
 
-      {status ? <div className="helperText" style={{ marginTop: 12 }}>{status}</div> : null}
+      {status ? <div className="helperText" role="status" style={{ marginTop: 12 }}>{status}</div> : null}
     </section>
   );
 }

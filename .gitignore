@@ -7,3 +7,4 @@ supabase/.temp/
 public/ocr/
 test-results/
 playwright-report/
+.vercel

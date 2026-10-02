@@ -114,33 +114,45 @@ export default function ScanPage() {
     finally { running.current = false; setBusy(false); }
   }
 
-  return <AuthGate><PageShell title="Scan Cards">
-    <section className="vaultHero">
-      <div><div className="vaultEyebrow">Scan Workflow</div><h1 className="vaultTitle">Scan cards into your ShadowFox vault.</h1><p className="vaultText">Upload a photo for AI identification, review and edit the details, then save your card. A new front photo starts a new card.</p></div>
-      <div className="vaultButtonRow"><button className="sfSecondaryBtn" onClick={() => router.push("/manual")}>Add Manually</button><button className="sfSecondaryBtn" onClick={() => router.push("/collection")}>View Collection</button></div>
+  return <AuthGate><PageShell>
+    <section className="workflowPageHeader">
+      <div><div className="vaultEyebrow">Capture your collection</div><h1 className="workflowTitle">A new card. <em>A new story.</em></h1><p className="workflowIntro">Add a photo, review the details, and make it part of your vault.</p></div>
+      <div className="buttonRow"><button className="btn ghost" onClick={() => router.push("/manual")}>Add Manually</button><button className="btn ghost" onClick={() => router.push("/collection")}>View Collection</button></div>
     </section>
-    <div className="layout2" style={{ alignItems: "start" }}>
-      <section className="panel">
+    <ol className="workflowSteps" aria-label="Add a card steps">
+      <li className={card.frontImage ? "isComplete" : "isActive"}><span>01</span> Add photos</li>
+      <li className={card.frontImage ? "isActive" : ""}><span>02</span> Review details</li>
+      <li><span>03</span> Save to vault</li>
+    </ol>
+    <div className="workflowLayout">
+      <section className="panel workflowPanel">
+        <div className="workflowPanelHeading"><h2>Start with a clear photo</h2><span className="helperText">JPG, PNG or WebP</span></div>
+        <p className="helperText">The front identifies the card. Add the back for extra detail, then select Identify Again. A new front photo starts a new card.</p>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
-          <div className="buttonRow">
-            <label className="btn primary">Upload Front<input aria-label="Upload front image" hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
-            <label className="btn accent">Camera<input aria-label="Take card photo" hidden type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
-            <label className="btn ghost">Add Back Image<input aria-label="Upload back image" hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
+          <div className="buttonRow" style={{ marginTop: 18 }}>
+            <label className="btn primary">Upload Front<input aria-label="Upload front image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
+            <label className="btn ghost">Use Camera<input aria-label="Take card photo" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
+            <label className="btn ghost">Add Back Image<input aria-label="Upload back image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
             <button type="button" className="btn ghost" disabled={!card.frontImage} onClick={() => void rescan()}>Identify Again</button>
           </div>
         </fieldset>
-        <p className="helperText" role="status" aria-live="polite">{status}</p>
-        <div className="layout2" style={{ marginTop: 16 }}><div className="previewCard cardFrame">{card.frontImage ? <img src={card.frontImage} alt="Front preview" /> : <span>Front preview</span>}</div><div className="previewCard cardFrame">{card.backImage ? <img src={card.backImage} alt="Back preview" /> : <span>Back preview</span>}</div></div>
+        <p className="workflowNotice" role="status" aria-live="polite">{status}</p>
+        <div className="workflowPhotoGrid">
+          <figure className="workflowPhoto"><div className="workflowPhotoVisual">{card.frontImage ? <img src={card.frontImage} alt="Front preview" /> : <span>Your card front<br /><small>Upload a photo to begin</small></span>}</div><figcaption>Front <span>Required for identification</span></figcaption></figure>
+          <figure className="workflowPhoto"><div className="workflowPhotoVisual">{card.backImage ? <img src={card.backImage} alt="Back preview" /> : <span>Your card back<br /><small>More detail, a better match</small></span>}</div><figcaption>Back <span>Optional</span></figcaption></figure>
+        </div>
+        <details className="workflowEvidence"><summary>Tips for a better scan</summary><p className="helperText">Use even light, keep the full card in view, and avoid glare. Leave the card number and player name readable. You can correct every field before saving.</p></details>
       </section>
-      <section className="panel">
+      <section className="panel workflowPanel">
+        <div className="workflowPanelHeading"><h2>Make the details yours</h2><span className="helperText">All fields are editable</span></div>
+        {aiWarnings.length ? <div className="workflowNotice"><strong>Before you save</strong><ul>{aiWarnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div> : null}
+        <p className="helperText">Check the player, card number, parallel and grade against your photos.</p>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={(next) => { setCard(next); setDuplicate(null); }} showImageFields={false} /></fieldset>
-        <div className="fieldBlockWide" style={{ marginTop: 16 }}><label className="label" htmlFor="ocr-text">Detected text</label><textarea id="ocr-text" className="input textarea" value={ocrText} readOnly placeholder="Text detected in your photo appears here." /></div>
-        {aiWarnings.length ? <ul className="helperText">{aiWarnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
-        {confidence !== null ? <p className="helperText">Field completeness: {Math.round(confidence * 100)}% — review the detected details.</p> : null}
+        <details className="workflowEvidence"><summary>View detected text</summary><div className="fieldBlockWide"><label className="label" htmlFor="ocr-text">Detected text</label><textarea id="ocr-text" className="input textarea" value={ocrText} readOnly placeholder="Text detected in your photo appears here." /></div>{confidence !== null ? <p className="helperText">Field completeness: {Math.round(confidence * 100)}% — review the detected details.</p> : null}</details>
         <div className="buttonRow" style={{ marginTop: 12 }}><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
         <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value) => setCard((previous) => ({ ...previous, estimatedValueCad: value }))} />
-        {duplicate ? <p className="helperText">Matching card: {duplicate.player} {duplicate.year} {duplicate.brand} #{duplicate.cardNumber}.</p> : null}
-        <div className="buttonRow" style={{ marginTop: 16 }}><button className="btn primary" disabled={busy} onClick={() => save()}>{duplicate ? "Save Separately" : "Save Card"}</button>{duplicate ? <button className="btn ghost" disabled={busy} onClick={() => save(true)}>Add to Existing Quantity</button> : null}</div>
+        {duplicate ? <p className="workflowNotice">Matching card: {duplicate.player} {duplicate.year} {duplicate.brand} #{duplicate.cardNumber}.</p> : null}
+        <div className="workflowSaveBar"><span className="helperText">{busy ? "Working on your card…" : "Ready when your details are."}</span><div className="buttonRow"><button className="btn primary" disabled={busy} onClick={() => save()}>{duplicate ? "Save Separately" : "Save Card"}</button>{duplicate ? <button className="btn ghost" disabled={busy} onClick={() => save(true)}>Add to Existing Quantity</button> : null}</div></div>
       </section>
     </div>
   </PageShell></AuthGate>;

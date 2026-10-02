@@ -22,6 +22,8 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, headers, body: '{}' });
     calls.push(`${request.method()} ${url.pathname}`);
     if (url.pathname === '/auth/v1/user') return route.fulfill({ headers, json: user });
+    if (url.pathname === '/auth/v1/logout') return route.fulfill({ status: 204, headers, body: '' });
+    if (url.pathname === '/rest/v1/profiles') return route.fulfill({ headers, json: { role: 'user' } });
     if (url.pathname === '/rest/v1/card_image_cleanup') return route.fulfill({ headers, json: [] });
     if (url.pathname.startsWith('/storage/v1/object/')) return route.fulfill({ headers, json: { Key: url.pathname } });
     if (url.pathname === '/rest/v1/rpc/increment_card_quantity') {
@@ -39,7 +41,9 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
       }
       const offset = Number(url.searchParams.get('offset') || 0);
       const limit = Math.min(Number(url.searchParams.get('limit') || 100), 100);
-      return route.fulfill({ headers, json: rows.slice(offset, offset + limit) });
+      const id = url.searchParams.get('id');
+      const matching = id?.startsWith('eq.') ? rows.filter(card => card.id === id.slice(3)) : rows;
+      return route.fulfill({ headers, json: matching.slice(offset, offset + limit) });
     }
     return route.fulfill({ status: 500, headers, json: { message: `Unexpected fixture request ${url.pathname}` } });
   });
@@ -117,6 +121,7 @@ test('collection totals and JSON export include rows beyond the API cap', async 
   await page.goto('/collection');
   await expect(page.locator('.kpiValue').first()).toHaveText('1105');
   const downloaded = page.waitForEvent('download');
+  await page.getByText('Export', { exact: true }).click();
   await page.getByRole('button', { name: 'Export JSON' }).click();
   const file = await downloaded;
   const exported = JSON.parse(await readFile((await file.path())!, 'utf8'));
@@ -187,4 +192,107 @@ test('130point pasted prices require review, convert USD to CAD, and persist an 
   await page.getByRole('button', { name: 'Save Card', exact: true }).click();
   await expect(page).toHaveURL(/\/collection$/);
   expect(backend.rows[0].estimated_value_cad).toBe(34);
+});
+
+test('gallery filters and card display preserve edits, cancel, and saved values on phones', async ({ page }) => {
+  const front = `http://127.0.0.1:54321/storage/v1/object/public/card-images/${userId}/front/gallery.png`;
+  const image = await cardImage(page);
+  const hockey = row({ player: 'Gallery Hockey', front_image_url: front, grading_company: 'PSA', grade: '9', rookie: true, estimated_value_cad: 40 });
+  const backend = await fixture(page, [hockey, row({ player: 'Gallery Baseball', sport: 'Baseball' }), row({ player: 'Another Hockey' })]);
+  await page.route(front, route => route.fulfill({ contentType: 'image/png', body: image.buffer }));
+  await page.goto('/collection');
+  await expect(page.locator('.vaultCollectionCard')).toHaveCount(3);
+  await expect(page.locator('.vaultCardWell img')).toHaveCSS('object-fit', 'contain');
+  await expect(page.locator('main h1')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Baseball', exact: true }).click();
+  await expect(page.locator('.vaultCollectionCard')).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'View Gallery Baseball', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await page.getByText('Filters', { exact: true }).click();
+  await page.getByLabel('Grading', { exact: true }).selectOption('yes');
+  await expect(page.locator('.vaultCollectionCard')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Search your collection' }).fill('Gallery Hockey');
+  await expect(page.locator('.vaultCollectionCard')).toHaveCount(1);
+  await page.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(page.locator('table tbody tr')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Gallery', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await page.locator('.vaultAdvancedFilters summary').click();
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (width <= 900) await expect(page.getByRole('navigation', { name: 'Mobile navigation' })).toBeVisible();
+    else await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+    if (width === 1280) await page.screenshot({ path: '/tmp/shadowfox-redesign-collection-desktop.png', fullPage: true });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.locator('.vaultCardGrid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/shadowfox-redesign-collection-mobile.png', fullPage: true });
+  await page.getByRole('link', { name: 'View Gallery Hockey', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Gallery Hockey', level: 1 })).toBeVisible();
+  await expect(page.locator('.detailImageStage img')).toHaveCSS('object-fit', 'contain');
+  await expect(page.getByLabel('Player', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.getByText('No back image added', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit card', exact: true }).click();
+  await page.getByLabel('Replace front image').focus();
+  await expect(page.getByLabel('Replace front image')).toBeFocused();
+  await page.getByLabel('Replace front image').setInputFiles({ name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('invalid image') });
+  await expect(page.getByText('Choose a JPEG, PNG, or WebP image.', { exact: true })).toBeVisible();
+  await page.getByLabel('Player', { exact: true }).fill('Unsaved draft');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Gallery Hockey', level: 1 })).toBeVisible();
+  expect(backend.calls).not.toContain('POST /rest/v1/cards');
+  await page.getByRole('button', { name: 'Edit card', exact: true }).click();
+  await page.getByLabel('Notes', { exact: true }).fill('Verified edit after the redesign');
+  await page.getByLabel('Estimated Value CAD').fill('45');
+  await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  await expect(page.getByText('Saved.', { exact: true })).toBeVisible();
+  expect(backend.rows.find(card => card.id === hockey.id)?.estimated_value_cad).toBe(45);
+  expect(backend.rows.find(card => card.id === hockey.id)?.notes).toBe('Verified edit after the redesign');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Insights', exact: true }).click();
+  await expect(page).toHaveURL(/\/analytics$/);
+  await expect(page.locator('main h1')).toHaveCount(1);
+  await expect(page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Insights', exact: true })).toHaveAttribute('aria-current', 'page');
+});
+
+test('signed-out navigation and keyboard sign-in stay usable', async ({ page }) => {
+  let submitted = false;
+  await page.route('http://127.0.0.1:54321/**', route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' }, body: '' });
+    submitted = true;
+    return route.fulfill({ status: 400, headers: { 'access-control-allow-origin': '*' }, json: { error: 'invalid_grant', error_description: 'Invalid login credentials' } });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0);
+  await page.getByLabel('Email', { exact: true }).fill('collector@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('fixture-password');
+  await page.getByLabel('Password', { exact: true }).press('Enter');
+  await expect(page.getByRole('status')).toContainText('Invalid login credentials');
+  expect(submitted).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/shadowfox-redesign-login-mobile.png', fullPage: true });
+});
+
+test('account navigation shows Admin only for the verified role and logs out', async ({ page }) => {
+  await fixture(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Account menu' })).toHaveAttribute('aria-expanded', 'false');
+  await page.route('**/rest/v1/profiles?**', route => route.fulfill({ json: { role: 'admin' }, headers: { 'access-control-allow-origin': '*' } }));
+  await page.reload();
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await expect(page.getByRole('link', { name: 'Admin', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Log Out', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0);
 });
