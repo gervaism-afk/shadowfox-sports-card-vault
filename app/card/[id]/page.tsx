@@ -9,7 +9,7 @@ import { useParams, useRouter } from "next/navigation";
 import { deleteCard, getCard, saveCard } from "@/lib/storage";
 import { CardRecord } from "@/lib/types";
 import { fileToDataUrl, recordTotal } from "@/lib/utils";
-import { ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
+import { duplicateKey, ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
 
 export default function CardDetailPage() {
   const params = useParams<{ id: string }>();
@@ -108,7 +108,7 @@ export default function CardDetailPage() {
             </fieldset>
 
             {status ? <div className="helperText" style={{ marginTop: 12 }}>{status}</div> : null}
-            <SoldPriceEstimator disabled={busy} onApply={(value) => setCard((previous) => previous ? { ...previous, estimatedValueCad: value } : previous)} />
+            <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value) => setCard((previous) => previous ? { ...previous, estimatedValueCad: value } : previous)} />
 
             <div className="buttonRow" style={{ marginTop: 16 }}>
               <a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">

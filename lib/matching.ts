@@ -30,6 +30,8 @@ export function ebayQuery(card: Partial<CardRecord>) {
     card.rookie ? "rookie" : "",
     card.autograph ? "auto" : "",
     card.relicPatch ? "patch" : "",
+    card.gradingCompany || "",
+    card.grade || "",
   ].filter(Boolean).join(" ").trim();
 }
 

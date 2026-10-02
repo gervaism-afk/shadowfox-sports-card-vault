@@ -14,7 +14,7 @@ import { computeConfidence, parseOcrText } from "@/lib/ocr";
 import { applyOcrGuess } from "@/lib/scan";
 import { supabase } from "@/lib/supabase";
 import { identityFields, parseIdentification } from "@/lib/ai-identification";
-import { ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
+import { duplicateKey, ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
 
 export default function ScanPage() {
   const [card, setCard] = useState<CardRecord>(emptyCard);
@@ -138,7 +138,7 @@ export default function ScanPage() {
         {aiWarnings.length ? <ul className="helperText">{aiWarnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
         {confidence !== null ? <p className="helperText">Field completeness: {Math.round(confidence * 100)}% — review the detected details.</p> : null}
         <div className="buttonRow" style={{ marginTop: 12 }}><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
-        <SoldPriceEstimator disabled={busy} onApply={(value) => setCard((previous) => ({ ...previous, estimatedValueCad: value }))} />
+        <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value) => setCard((previous) => ({ ...previous, estimatedValueCad: value }))} />
         {duplicate ? <p className="helperText">Matching card: {duplicate.player} {duplicate.year} {duplicate.brand} #{duplicate.cardNumber}.</p> : null}
         <div className="buttonRow" style={{ marginTop: 16 }}><button className="btn primary" disabled={busy} onClick={() => save()}>{duplicate ? "Save Separately" : "Save Card"}</button>{duplicate ? <button className="btn ghost" disabled={busy} onClick={() => save(true)}>Add to Existing Quantity</button> : null}</div>
       </section>

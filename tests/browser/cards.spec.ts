@@ -71,6 +71,7 @@ test('real local OCR, sold-price estimate, save, and collection navigation', asy
   await expect(page.getByLabel('Brand', { exact: true })).toHaveValue('Upper Deck');
   await expect(page.getByLabel('Card Number', { exact: true })).toHaveValue('201');
   await page.getByText('Estimate from sold prices', { exact: true }).click();
+  await page.getByText('Or enter confirmed CAD prices', { exact: true }).click();
   await page.getByLabel('Sold prices in CAD').fill('20\n30\n25');
   await page.getByRole('button', { name: 'Apply Estimate' }).click();
   await expect(page.getByLabel('Estimated Value CAD')).toHaveValue('25');
@@ -155,4 +156,35 @@ test('AI fills editable details, combines front and back, and saves corrections'
   await expect(page).toHaveURL(/\/collection$/);
   expect(backend.rows[0].year).toBe('2022-23');
   expect(backend.rows[0].set_name).toBe('Series One');
+});
+
+
+test('130point pasted prices require review, convert USD to CAD, and persist an edited estimate', async ({ page }) => {
+  const backend = await fixture(page);
+  await page.route('**/api/identify', route => route.fulfill({ json: { fields: { sport: 'Hockey', player: 'Connor McDavid', year: '2015-16', brand: 'Upper Deck', set: 'Series One', subset: 'Young Guns', cardNumber: '201', gradingCompany: 'PSA', grade: '9' }, warnings: [], evidence: 'Synthetic test' } }));
+  await page.route('**/api/pricing/exchange-rate', route => route.fulfill({ json: { rate: 1.4, date: new Date().toISOString().slice(0, 10), source: 'Bank of Canada' } }));
+  await page.goto('/scan');
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor McDavid');
+  await page.getByText('Estimate from sold prices', { exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Open 130point' })).toHaveAttribute('href', 'https://130point.com/sales/');
+  await expect(page.getByLabel('Card search text')).toHaveValue(/PSA 9$/);
+  await page.getByLabel('Paste sold results').fill('Matching card\nSold price: US $20.00\nShipping: US $5.00\nSold price: CAD $42.00\nAsking price: US $500.00');
+  await page.getByRole('button', { name: 'Review Pasted Prices' }).click();
+  await expect(page.getByRole('checkbox', { name: 'Include USD 20.00', exact: true })).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Calculate Selected Prices' })).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Include USD 20.00', exact: true }).check();
+  await page.getByRole('checkbox', { name: 'Include CAD 42.00', exact: true }).check();
+  await page.getByRole('button', { name: 'Calculate Selected Prices' }).click();
+  await expect(page.getByText('Suggested value:', { exact: false })).toContainText('$35.00 CAD');
+  await expect(page.getByText(/Bank of Canada rate dated/)).toBeVisible();
+  await page.getByRole('button', { name: 'Apply Selected Estimate' }).click();
+  await expect(page.getByLabel('Estimated Value CAD')).toHaveValue('35');
+  await page.getByLabel('Estimated Value CAD').fill('34');
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/shadowfox-sold-review-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: 'Save Card', exact: true }).click();
+  await expect(page).toHaveURL(/\/collection$/);
+  expect(backend.rows[0].estimated_value_cad).toBe(34);
 });

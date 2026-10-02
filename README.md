@@ -53,3 +53,11 @@ The scan page first calls the authenticated `/api/identify` endpoint. Set the se
 Automatic completed-sale retrieval is still pending confirmation of the existing price provider and its credentials. No asking prices or AI-generated numbers are presented as sold prices. The existing manual sold-price calculator remains available. Current SerpApi eBay documentation states Sold and Complete filters are deprecated, so it cannot be assumed to supply completed-sale comparables.
 
 OpenRouter vision is also supported: set server-only `OPENROUTER_API_KEY` and optionally `OPENROUTER_VISION_MODEL` (default `openai/gpt-4.1-mini`). OpenRouter takes precedence when both provider keys are set. Unknown or refused outputs are not applied. Never commit provider keys.
+
+## 130point sold-price workflow
+
+On Scan Cards or a saved card, open **Estimate from sold prices**. Copy the generated card search text (including grading), open 130point, and run the search there. Paste the copied results into the app, choose the currency for amounts with no currency code, then review the extracted amounts. Nothing is selected automatically: include only actual completed sales for the same card, parallel, and condition, excluding asking prices, shipping, fees, and lots.
+
+Select **Calculate Selected Prices** to preview a median and range in CAD. USD amounts use a recent Bank of Canada daily exchange rate, shown with its date; this is not a historical conversion for each sale. If the rate is unavailable, the app does not invent a conversion. Select **Apply Selected Estimate**, edit Estimated Value CAD if needed, then save the card. Changing card identity clears pasted-price review so another card's estimate is not carried over. The existing one-price-per-line CAD calculator remains available.
+
+This is a user-assisted lookup and paste workflow. The app does not scrape 130point or automatically retrieve its sales, and pasted amounts are not independently verified. No new subscriptions or database migrations are required.
