@@ -10,6 +10,7 @@ function row(patch: Record<string, unknown> = {}) {
 async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
   await page.route('**/api/identify', route => route.fulfill({ status: 503, json: { error: 'AI identification is not configured.' } }));
   const rows = [...initial];
+  const binders: any[] = []; const memberships: any[] = []; const wants: any[] = [];
   const calls: string[] = [];
   const token = [Buffer.from('{"alg":"HS256"}').toString('base64url'), Buffer.from(JSON.stringify({ sub: userId, exp: Math.floor(Date.now() / 1000) + 3600, role: 'authenticated' })).toString('base64url'), 'test-only-signature'].join('.');
   await page.addInitScript(({ token, user }) => {
@@ -32,6 +33,29 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
       card.quantity += amount;
       return route.fulfill({ headers, json: card });
     }
+    if (['/rest/v1/binders','/rest/v1/binder_cards','/rest/v1/want_list'].includes(url.pathname)) {
+      const store = url.pathname.endsWith('/binders') ? binders : url.pathname.endsWith('/binder_cards') ? memberships : wants;
+      if (request.method() === 'GET') { const offset=Number(url.searchParams.get('offset')||0); const limit=Math.min(Number(url.searchParams.get('limit')||100),100);return route.fulfill({ headers, json: store.slice(offset,offset+limit) }); }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON(); const entry = { id: randomUUID(), created_at: new Date().toISOString(), ...body };
+        if (!store.some(item => entry.binder_id && item.binder_id === entry.binder_id && item.card_id === entry.card_id)) store.push(entry);
+        return route.fulfill({ headers, json: entry });
+      }
+      const matches = (item: any) => ['id','binder_id','card_id'].every(key => !url.searchParams.has(key) || item[key] === url.searchParams.get(key)!.slice(3));
+      if (request.method() === 'PATCH') { const entry=store.find(matches);Object.assign(entry,request.postDataJSON());return route.fulfill({headers,json:entry}); }
+      if (request.method() === 'DELETE') {
+        const deleted=store.filter(matches); for(let i=store.length-1;i>=0;i--)if(matches(store[i]))store.splice(i,1);
+        if(store===binders)for(let i=memberships.length-1;i>=0;i--)if(deleted.some(b=>b.id===memberships[i].binder_id))memberships.splice(i,1);
+        return route.fulfill({status:204,headers,body:''});
+      }
+    }
+    if (url.pathname === '/rest/v1/rpc/acquire_wanted_card') {
+      const body=request.postDataJSON(); const index=wants.findIndex(w=>w.id===body.want_id);const card=wants[index].card_data;
+      let acquired=rows.find(r=>r.id===body.existing_card_id);
+      if(acquired)acquired.quantity+=card.quantity;
+      else {acquired=row({player:card.player,year:card.year,brand:card.brand,set_name:card.set,subset:card.subset,card_number:card.cardNumber,parallel:card.parallel,team:card.team,rookie:card.rookie,autograph:card.autograph,relic_patch:card.relicPatch,serial_number:card.serialNumber,grading_company:card.gradingCompany,grade:card.grade,quantity:card.quantity,notes:card.notes});rows.push(acquired);}
+      wants.splice(index,1);return route.fulfill({headers,json:acquired.id});
+    }
     if (url.pathname === '/rest/v1/cards') {
       if (request.method() === 'POST') {
         const saved = request.postDataJSON();
@@ -47,7 +71,7 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
     }
     return route.fulfill({ status: 500, headers, json: { message: `Unexpected fixture request ${url.pathname}` } });
   });
-  return { rows, calls };
+  return { rows, calls, binders, memberships, wants };
 }
 async function cardImage(page: Page, player = 'CONNOR MCDAVID', year = '2023', brand = 'Upper Deck', number = '201') {
   const url = await page.evaluate(({ player, year, brand, number }) => {
@@ -358,4 +382,63 @@ test('collection PDF downloads all paginated cards or the chosen filtered subset
   await page.getByRole('button', { name: 'Download PDF', exact: true }).click();
   const subset = (await readFile((await (await subsetDownload).path())!)).toString('latin1');
   expect((subset.match(/\/FT \/Btn/g) || []).length).toBe(1);
+});
+
+test('binders add, rename, print, and remove cards without deleting inventory', async ({ page }) => {
+  const backend=await fixture(page,[row({player:'Nick Suzuki',year:'2021-22',brand:'Upper Deck',set_name:'MVP',card_number:'87'})]);
+  await page.goto('/binders');
+  await page.getByLabel('New binder name').fill('Canadiens');
+  await page.getByRole('button',{name:'Create binder',exact:true}).click();
+  await expect(page.getByLabel('Choose binder')).toContainText('Canadiens');
+  await page.getByText('Add or remove cards',{exact:true}).click();
+  await page.getByRole('checkbox',{name:'Include Nick Suzuki 2021-22 #87'}).check();
+  await expect(page.getByRole('link',{name:'View Nick Suzuki',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Rename binder',exact:true}).click();
+  await page.getByLabel('Binder name',{exact:true}).fill('My hockey favorites');
+  await page.getByRole('button',{name:'Save binder name',exact:true}).click();
+  await expect(page.getByLabel('Choose binder')).toContainText('My hockey favorites');
+  const downloaded=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Print / PDF',exact:true}).click();
+  await page.getByRole('button',{name:'Download PDF',exact:true}).click();
+  expect((await downloaded).suggestedFilename()).toBe('shadowfox-binder-checklist.pdf');
+  for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+  page.once('dialog',dialog=>dialog.accept());
+  await page.getByRole('button',{name:'Delete binder',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Start your first binder.',exact:true})).toBeVisible();
+  expect(backend.rows).toHaveLength(1);expect(backend.memberships).toHaveLength(0);
+});
+
+test('wanted cards edit and print separately, then acquire once or merge owned quantity', async ({ page }) => {
+  const backend=await fixture(page);
+  await page.goto('/want-list');
+  await page.getByRole('button',{name:'Add wanted card',exact:true}).click();
+  await page.getByLabel('Player',{exact:true}).fill('Nick Suzuki');
+  await page.getByLabel('Year',{exact:true}).fill('2021-22');
+  await page.getByLabel('Brand',{exact:true}).fill('Upper Deck');
+  await page.getByLabel('Set',{exact:true}).fill('MVP');
+  await page.getByLabel('Card Number',{exact:true}).fill('87');
+  await page.getByLabel('Desired quantity',{exact:true}).fill('2');
+  await page.getByRole('button',{name:'Save wanted card',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Nick Suzuki',exact:true})).toBeVisible();
+  expect(backend.rows).toHaveLength(0);expect(backend.wants).toHaveLength(1);
+  await page.getByRole('button',{name:'Edit wanted card',exact:true}).click();
+  await page.getByLabel('Parallel',{exact:true}).fill('Silver Script');
+  await page.getByRole('button',{name:'Save wanted card',exact:true}).click();
+  await expect(page.getByText(/#87.*Silver Script/)).toBeVisible();
+  const downloaded=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Print / PDF',exact:true}).click();
+  await expect(page.getByRole('checkbox',{name:'Include saved CAD estimates'})).toHaveCount(0);
+  await page.getByRole('button',{name:'Download PDF',exact:true}).click();
+  expect((await downloaded).suggestedFilename()).toBe('shadowfox-want-list.pdf');
+  await page.getByRole('button',{name:'Move to collection',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Moved to your collection.');
+  expect(backend.wants).toHaveLength(0);expect(backend.rows).toHaveLength(1);expect(backend.rows[0].quantity).toBe(2);
+  await page.getByRole('button',{name:'Add wanted card',exact:true}).click();
+  for(const [label,value] of [['Player','Nick Suzuki'],['Year','2021-22'],['Brand','Upper Deck'],['Set','MVP'],['Card Number','87'],['Parallel','Silver Script']])await page.getByLabel(label,{exact:true}).fill(value);
+  await page.getByRole('button',{name:'Save wanted card',exact:true}).click();
+  await page.getByRole('button',{name:'Move to collection',exact:true}).click();
+  await page.getByRole('button',{name:'Add to existing quantity',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Quantity added');
+  expect(backend.rows).toHaveLength(1);expect(backend.rows[0].quantity).toBe(3);expect(backend.wants).toHaveLength(0);
+  for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
 });

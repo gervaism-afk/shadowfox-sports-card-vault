@@ -7,7 +7,7 @@ import ImagePicker from "@/components/ImagePicker";
 const gradingOptions: GradingCompany[] = ["", "PSA", "BGS", "SGC", "CGC", "Other"];
 const sportOptions: Sport[] = ["Hockey", "Baseball"];
 
-export default function CardForm({ value, onChange, showImageFields = true }: { value: CardRecord; onChange: (card: CardRecord) => void; showImageFields?: boolean; }) {
+export default function CardForm({ value, onChange, showImageFields = true, wanted = false }: { value: CardRecord; onChange: (card: CardRecord) => void; showImageFields?: boolean; wanted?: boolean; }) {
   const id = useId();
   const setField = <K extends keyof CardRecord>(key: K, next: CardRecord[K]) => onChange({ ...value, [key]: next });
 
@@ -25,8 +25,8 @@ export default function CardForm({ value, onChange, showImageFields = true }: { 
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-parallel`}> Parallel</label><input id={`${id}-parallel`} className="input" value={value.parallel} onChange={(e) => setField("parallel", e.target.value)} /></div>
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-gradingCompany`}> Grading Company</label><select id={`${id}-gradingCompany`} className="input" value={value.gradingCompany} onChange={(e) => setField("gradingCompany", e.target.value as GradingCompany)}>{gradingOptions.map((opt) => <option key={opt} value={opt}>{opt || "Select one"}</option>)}</select></div>
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-grade`}> Grade</label><input id={`${id}-grade`} className="input" value={value.grade} onChange={(e) => setField("grade", e.target.value)} /></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-quantity`}> Quantity</label><input id={`${id}-quantity`} className="input" type="number" min={1} value={value.quantity} onChange={(e) => setField("quantity", Number(e.target.value || 1))} /></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-estimatedValueCad`}> Estimated Value CAD</label><input id={`${id}-estimatedValueCad`} className="input" type="number" min={0} step="0.01" value={value.estimatedValueCad} onChange={(e) => setField("estimatedValueCad", Number(e.target.value || 0))} /></div>
+      <div className="fieldBlock"><label className="label" htmlFor={`${id}-quantity`}>{wanted ? "Desired quantity" : "Quantity"}</label><input id={`${id}-quantity`} className="input" type="number" min={1} value={value.quantity} onChange={(e) => setField("quantity", Number(e.target.value || 1))} /></div>
+      {!wanted ? <div className="fieldBlock"><label className="label" htmlFor={`${id}-estimatedValueCad`}> Estimated Value CAD</label><input id={`${id}-estimatedValueCad`} className="input" type="number" min={0} step="0.01" value={value.estimatedValueCad} onChange={(e) => setField("estimatedValueCad", Number(e.target.value || 0))} /></div> : null}
       <div className="fieldBlock fieldBlockWide"><label className="label" htmlFor={`${id}-notes`}> Notes</label><textarea id={`${id}-notes`} className="input textarea" value={value.notes} onChange={(e) => setField("notes", e.target.value)} /></div>
       <div className="toggleGroup fieldBlockWide">
         <label className="checkRow"><input type="checkbox" checked={value.rookie} onChange={(e) => setField("rookie", e.target.checked)} /><span>Rookie</span></label>

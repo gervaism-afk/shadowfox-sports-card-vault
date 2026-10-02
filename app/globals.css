@@ -647,3 +647,14 @@ summary::marker { color: var(--accent); }
 
 .pdfDialog button.btn { text-align: center; border: 1px solid var(--line); padding: 11px 16px; }
 .pdfDialog button.btn.primary { background: var(--accent); color: #141412; font-weight: 600; }
+
+.organizeNav { margin: 20px 0; }
+.organizeCreate { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px; }
+.organizeCreate .label { grid-column: 1 / -1; margin: 0; }
+.binderPicker { margin-top: 20px; }
+.binderPicker summary { cursor: pointer; font-weight: 600; margin-bottom: 20px; }
+.binderPickerRows { display: grid; gap: 12px; max-height: 420px; overflow-y: auto; }
+.binderPickerRows small { display: block; color: var(--muted); margin-top: 3px; }
+.wantListRows { display: grid; gap: 16px; }
+.wantListRows h2 { margin: 8px 0; }
+@media(max-width: 480px) { .organizeCreate { grid-template-columns: 1fr; } }

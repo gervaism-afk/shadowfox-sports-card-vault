@@ -1,7 +1,7 @@
 import { jsPDF, AcroFormCheckBox } from "jspdf";
 import type { CardRecord } from "./types";
 
-export type CollectionPdfOptions = { paper: "letter" | "a4"; includeValues: boolean; scope: "All cards" | "Filtered cards"; generatedAt?: Date };
+export type CollectionPdfOptions = { paper: "letter" | "a4"; includeValues: boolean; scope: string; kind?: "owned" | "wanted"; generatedAt?: Date };
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 const clean = (value: string) => value.replace(/[\x00-\x1f\x7f]/g, " ").trim();
 export function collectionPdfGroups(cards: CardRecord[]) {
@@ -33,15 +33,15 @@ export function createCollectionPdf(cards: CardRecord[], options: CollectionPdfO
       doc.setFont("helvetica", "bold"); doc.setFontSize(19); doc.setTextColor(244, 240, 230);
       doc.text("ShadowFox Cards", logo ? margin + 70 : margin, 33);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(212, 176, 119);
-      doc.text("YOUR COLLECTION CHECKLIST", logo ? margin + 70 : margin, 52);
+      doc.text(options.kind === "wanted" ? "YOUR WANT LIST CHECKLIST" : "YOUR COLLECTION CHECKLIST", logo ? margin + 70 : margin, 52);
       doc.setTextColor(30, 30, 28); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
       const titleLines = doc.splitTextToSize(group.title, width - 2 * margin) as string[];
       doc.text(titleLines, margin, 102);
       let top = 104 + titleLines.length * 14;
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(90, 90, 85);
-      doc.text(`${group.sport} · ${group.cards.length} entries · ${group.cards.reduce((sum, card) => sum + card.quantity, 0)} cards · Sheet ${sheet}`, margin, top);
+      doc.text(`${group.sport} · ${group.cards.length} entries · ${group.cards.reduce((sum, card) => sum + card.quantity, 0)} ${options.kind === "wanted" ? "wanted copies" : "cards"} · Sheet ${sheet}`, margin, top);
       top += 16;
-      doc.text("Check boxes as you review your inventory. This list includes saved cards only.", margin, top);
+      doc.text(options.kind === "wanted" ? "Check boxes as you find these cards. These entries are wanted, not owned." : "Check boxes as you review your inventory. This list includes saved cards only.", margin, top);
       top += 22;
       for (let col = 0; col < 3 && index < group.cards.length; col++) {
         const x = margin + col * (colWidth + gap); let y = top;
@@ -50,7 +50,7 @@ export function createCollectionPdf(cards: CardRecord[], options: CollectionPdfO
           doc.setFont("helvetica", "bold"); doc.setFontSize(9);
           const names = doc.splitTextToSize(clean(`${card.cardNumber ? `#${card.cardNumber}  ` : ""}${card.player || "Unnamed card"}`), colWidth - 19) as string[];
           const variants = [card.parallel, card.serialNumber, [card.gradingCompany, card.grade].filter(Boolean).join(" "), card.rookie ? "Rookie" : "", card.autograph ? "Auto" : "", card.relicPatch ? "Relic" : ""].filter(Boolean).map(clean);
-          const details = [`Qty ${card.quantity}`, ...variants, ...(options.includeValues ? [card.estimatedValueCad > 0 ? `Est. CAD ${card.estimatedValueCad.toFixed(2)}` : "No estimate"] : [])].join(" · ");
+          const details = [`${options.kind === "wanted" ? "Want" : "Qty"} ${card.quantity}`, ...variants, ...(options.includeValues ? [card.estimatedValueCad > 0 ? `Est. CAD ${card.estimatedValueCad.toFixed(2)}` : "No estimate"] : [])].join(" · ");
           doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
           const detailLines = doc.splitTextToSize(details, colWidth - 19) as string[];
           const rowHeight = Math.max(29, names.length * 11 + detailLines.length * 9 + 8);
@@ -73,7 +73,8 @@ export function createCollectionPdf(cards: CardRecord[], options: CollectionPdfO
   for (let page = 1; page <= pages; page++) {
     doc.setPage(page); doc.setDrawColor(212, 176, 119); doc.line(margin, height - 44, width - margin, height - 44);
     doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(90, 90, 85);
-    doc.text(`${options.scope} · ${cards.length} entries · Generated ${date}`, margin, height - 29);
+    const footer = doc.splitTextToSize(`${options.scope} · ${cards.length} entries · Generated ${date}`, width - 2 * margin - 95) as string[];
+    doc.text(footer.slice(0,2), margin, height - 32);
     doc.text(`Page ${page} of ${pages}`, width - margin, height - 29, { align: "right" });
     if (options.includeValues) { doc.setFontSize(7); doc.text("Values are your saved estimates, not confirmed sale prices.", margin, height - 16); }
   }
