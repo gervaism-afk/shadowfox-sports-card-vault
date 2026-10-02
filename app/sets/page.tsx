@@ -469,7 +469,7 @@ export default function SetsPage() {
                   <CollectionPdfExport
                     cards={missingCards}
                     filtered={missingCards}
-                    disabled={!missingCards.length}
+                    disabled={busy || editing || !missingCards.length}
                     kind="wanted"
                     title={`${list.title} · User-defined checklist`}
                     filterDescription={list.title}
