@@ -21,7 +21,7 @@ export default function CollectionPdfExport({ cards, filtered, disabled, kind = 
     finally { setBusy(false); }
   }
   return <>
-    <button type="button" disabled={disabled || !cards.length} onClick={() => { setError(""); dialog.current?.showModal(); }}>Print / PDF</button>
+    <button type="button" className="btn ghost" disabled={disabled || !cards.length} onClick={() => { setError(""); dialog.current?.showModal(); }}>Print / PDF</button>
     <dialog ref={dialog} className="pdfDialog" aria-labelledby={`${id}-title`}>
       <div className="pdfDialogHeading"><h2 id={`${id}-title`}>{kind === "wanted" ? "Print your want list" : title ? "Print your binder" : "Print your collection"}</h2><button type="button" className="btn ghost" aria-label="Close PDF options" disabled={busy} onClick={() => dialog.current?.close()}>Close</button></div>
       <p className="helperText">A clean checklist with your logo, organized by sport, year and set. Card numbers, players, quantities and variants are included. Check boxes on paper or in a PDF reader.</p>
