@@ -14,6 +14,8 @@ test('bare prices use the selected currency; only confirmed records are valued',
   const result = parsePastedSaleAmounts('20\n$30 USD\nC$40\nAsking price: $500', 'CAD');
   assert.deepEqual(result.amounts.map(({ currency }) => currency), ['CAD', 'USD', 'CAD', 'CAD']);
   assert.deepEqual(estimateConfirmedSales(result.amounts.slice(0, 3), 1.4), { estimateCad: 40, sampleCount: 3, low: 20, high: 42 });
+  const halfCent = parsePastedSaleAmounts('US $20\nCAD $42', 'USD');
+  assert.equal(estimateConfirmedSales(halfCent.amounts, 1.4243).estimateCad, 35.25);
   assert.throws(() => estimateConfirmedSales([], 1.4));
   assert.throws(() => estimateConfirmedSales([result.amounts[1]]));
   assert.throws(() => parsePastedSaleAmounts('x'.repeat(30001), 'USD'));

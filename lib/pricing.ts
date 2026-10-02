@@ -10,8 +10,10 @@ export function estimateSoldPrices(input: string) {
     return value;
   }).sort((a, b) => a - b);
   const middle = Math.floor(prices.length / 2);
-  const median = prices.length % 2 ? prices[middle] : (prices[middle - 1] + prices[middle]) / 2;
-  return { estimateCad: Math.round((median + Number.EPSILON) * 100) / 100, sampleCount: prices.length, low: prices[0], high: prices.at(-1)! };
+  // Work in integer cents so an even sample rounds half-cents consistently.
+  const cents = prices.map(price => Math.round(price * 100));
+  const medianCents = prices.length % 2 ? cents[middle] : (cents[middle - 1] + cents[middle]) / 2;
+  return { estimateCad: Math.round(medianCents) / 100, sampleCount: prices.length, low: prices[0], high: prices.at(-1)! };
 }
 
 export type SaleCurrency = 'CAD' | 'USD';
