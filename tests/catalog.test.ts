@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {parseHockeySets,parseBaseballSets,parseNhlPlayers,parseNhlTeams,parseMlbTeams,parseMlbPlayers} from '../lib/catalog/parsers';
-import {normalizeOption,optionValues} from '../lib/catalog/types';
+import {matchesCatalogYear,normalizeOption,optionValues} from '../lib/catalog/types';
 import {filterCards,sortCards} from '../lib/utils';
 import {defaultFilters,emptyCard} from '../lib/defaults';
 import {cardsCsv,filterDescription} from '../lib/collection-export';
@@ -33,4 +33,12 @@ test('combined exact filters distinguish sets, brands, seasons, variations and s
 test('filtered CSV exports exactly the selected records and escapes unsafe spreadsheet cells',()=>{
  const csv=cardsCsv([{...emptyCard(),player:'=formula',notes:'quoted "text"\nnext line',quantity:2}]);
  assert.match(csv,/"'=formula"/);assert.match(csv,/"quoted ""text""\nnext line"/);assert.equal(csv.split('\r\n').length,2);
+});
+
+test('calendar hockey years include both overlapping seasons without broadening exact seasons or baseball years',()=>{
+ assert.equal(matchesCatalogYear('2025-26','2026','Hockey'),true);
+ assert.equal(matchesCatalogYear('2026-27','2026','Hockey'),true);
+ assert.equal(matchesCatalogYear('2024-25','2026','Hockey'),false);
+ assert.equal(matchesCatalogYear('2025-26','2026-27','Hockey'),false);
+ assert.equal(matchesCatalogYear('2025-26','2026','Baseball'),false);
 });
