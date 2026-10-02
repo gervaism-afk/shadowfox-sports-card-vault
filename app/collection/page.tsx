@@ -77,7 +77,7 @@ export default function CollectionPage() {
           </div> : null}
         </section>
         {error ? <section className="panel" role="alert">{error}</section> : null}
-        <div className="buttonRow organizeNav"><Link className="btn ghost" href="/binders">Binders</Link><Link className="btn ghost" href="/want-list">Want list</Link></div>
+        <div className="buttonRow organizeNav"><Link className="btn ghost" href="/binders">Binders</Link><Link className="btn ghost" href="/want-list">Want list</Link><Link className="btn ghost" href="/backup">Backup &amp; restore</Link></div>
         <CollectionControls filters={filters} setFilters={setFilters} sortKey={sortKey} setSortKey={setSortKey} viewMode={viewMode} setViewMode={setViewMode} />
         <div className="vaultSectionHeading">
           <div><h2>{hasFilters ? "Matching cards" : "All cards"}</h2><p className="vaultResultsLabel">{cardsLoading ? "Loading your collection…" : `${filtered.length} ${filtered.length === 1 ? "entry" : "entries"}${hasFilters ? ` of ${cards.length}` : ""} in your vault`}</p></div>

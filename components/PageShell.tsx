@@ -14,6 +14,7 @@ const sidebarLinks = [
   { href: "/scan", label: "Scan a card", icon: "scan" },
   { href: "/analytics", label: "Insights", icon: "chart" },
   { href: "/transactions", label: "Purchases & sales", icon: "chart" },
+  { href: "/backup", label: "Collection backup", icon: "shield" },
 ];
 
 export default function PageShell({ title, children }: { title?: string; children: React.ReactNode }) {

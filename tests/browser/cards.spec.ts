@@ -476,3 +476,57 @@ test('purchase and sale ledger distinguishes unknown costs, edits profit, export
   await expect(page.getByRole('status')).toContainText('Transaction deleted');
   expect(backend.transactions).toHaveLength(0);expect(backend.rows[0].quantity).toBe(2);
 });
+
+test('collection backup previews matching cards, restores missing variants and skips a repeated import', async ({page}) => {
+  const owned=row({player:'Nick Suzuki',year:'2021-22',brand:'Upper Deck',set_name:'MVP',card_number:'87',parallel:'Silver Script',quantity:5,notes:'Keep my current details'});
+  const backend=await fixture(page,[owned]);
+  const source={id:randomUUID(),sport:'Hockey',player:'Nick Suzuki',year:'2021-22',brand:'Upper Deck',set:'MVP',cardNumber:'87',parallel:'Silver Script',quantity:99,estimatedValueCad:3,notes:'Old backup notes'};
+  const file={name:'collection-backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'shadowfox-collection-backup',version:1,exportedAt:'2026-10-02T00:00:00Z',cards:[source,{...source,id:randomUUID(),parallel:'Gold Script',quantity:2,user_id:'not-the-current-user'}]}))};
+  await page.goto('/backup');
+  await expect(page.getByLabel('Collection backup file',{exact:true})).toBeEnabled();await page.getByLabel('Collection backup file',{exact:true}).setInputFiles(file);
+  await expect(page.getByRole('heading',{name:'Review your backup',exact:true})).toBeVisible();
+  await expect(page.locator('.backupCounts')).toContainText('1 to add');
+  expect(backend.rows).toHaveLength(1);
+  await page.getByRole('button',{name:'Restore 1 missing entry',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Restore complete');
+  expect(backend.rows).toHaveLength(2);expect(backend.rows.find(r=>r.id===owned.id)?.quantity).toBe(5);
+  expect(backend.rows.find(r=>r.parallel==='Gold Script')?.quantity).toBe(2);
+  expect(backend.rows.find(r=>r.parallel==='Gold Script')?.user_id).toBe(userId);
+  await expect(page.getByLabel('Collection backup file',{exact:true})).toBeEnabled();await page.getByLabel('Collection backup file',{exact:true}).setInputFiles(file);
+  await expect(page.locator('.backupCounts')).toContainText('0 to add');
+  await expect(page.getByRole('button',{name:'All entries already in your collection',exact:true})).toBeDisabled();
+  await page.getByLabel('Include card photos',{exact:true}).uncheck();
+  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download collection backup',exact:true}).click();
+  expect((await download).suggestedFilename()).toMatch(/^shadowfox-collection-backup-/);
+  for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+});
+
+test('damaged embedded photos and invalid JSON cannot enable restore or write cards',async({page})=>{
+  const backend=await fixture(page);await page.goto('/backup');
+  const invalid={sport:'Hockey',player:'Damaged photo',quantity:1,frontImage:'data:image/png;base64,AAAA'};
+  await expect(page.getByLabel('Collection backup file',{exact:true})).toBeEnabled();await page.getByLabel('Collection backup file',{exact:true}).setInputFiles({name:'damaged.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify([invalid]))});
+  await expect(page.locator('.workflowNotice[role=alert]')).toContainText('damaged or unreadable');
+  await expect(page.getByRole('heading',{name:'Review your backup',exact:true})).toHaveCount(0);expect(backend.rows).toHaveLength(0);
+  await expect(page.getByLabel('Collection backup file',{exact:true})).toBeEnabled();await page.getByLabel('Collection backup file',{exact:true}).setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('not json')});
+  await expect(page.locator('.workflowNotice[role=alert]')).toContainText('not valid JSON');expect(backend.rows).toHaveLength(0);
+});
+
+test('interrupted restore retains saved cards and safely resumes without changing their quantities',async({page})=>{
+  const backend=await fixture(page);let fail=true;
+  await page.route('**/rest/v1/cards*',async route=>{
+    if(route.request().method()==='POST'&&route.request().postDataJSON().player==='Second restored card'&&fail)return route.fulfill({status:503,json:{message:'Temporary connection failure'},headers:{'access-control-allow-origin':'*','access-control-allow-headers':'*'}});
+    return route.fallback();
+  });
+  const file={name:'resume.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify([
+    {id:randomUUID(),sport:'Hockey',player:'First restored card',quantity:2},
+    {id:randomUUID(),sport:'Hockey',player:'Second restored card',quantity:3}
+  ]))};
+  await page.goto('/backup');await expect(page.getByLabel('Collection backup file',{exact:true})).toBeEnabled();await page.getByLabel('Collection backup file',{exact:true}).setInputFiles(file);
+  await page.getByRole('button',{name:'Restore 2 missing entries',exact:true}).click();
+  await expect(page.locator('.workflowNotice[role=alert]')).toContainText('1 entries were added');
+  expect(backend.rows).toHaveLength(1);const savedId=backend.rows[0].id;
+  fail=false;await expect(page.getByLabel('Collection backup file',{exact:true})).toBeEnabled();await page.getByLabel('Collection backup file',{exact:true}).setInputFiles(file);
+  await page.getByRole('button',{name:'Restore 1 missing entry',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Restore complete');
+  expect(backend.rows).toHaveLength(2);expect(backend.rows.find(r=>r.id===savedId)?.quantity).toBe(2);
+});

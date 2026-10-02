@@ -674,3 +674,17 @@ summary::marker { color: var(--accent); }
 .transactionAmounts dt { color:var(--muted); font-size:13px; margin-bottom:7px; }
 .transactionAmounts dd { margin:0; font-size:19px; font-weight:600; }
 @media(max-width:600px) { .transactionStats,.transactionFields { grid-template-columns:1fr; } .transactionStats { gap:10px; } .transactionStats .metaCard { padding:18px; } }
+
+.backupPanels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; margin:24px 0; }
+.backupPanels .panel { margin:0; min-width:0; }
+.backupPanels h2 { margin:12px 0; }
+.backupPanels .input[type=file] { width:100%; min-width:0; font-size:14px; }
+.backupCounts { display:flex; flex-wrap:wrap; gap:12px 24px; margin:20px 0; }
+.backupCounts strong { color:var(--accent); }
+.backupFilename { overflow-wrap:anywhere; }
+.backupCardList { list-style:none; padding:0; margin:24px 0; max-height:480px; overflow:auto; }
+.backupCardList li { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:16px 0; border-bottom:1px solid var(--line); }
+.backupCardList li div { display:flex; flex-direction:column; gap:6px; min-width:0; overflow-wrap:anywhere; }
+.backupCardList li span { color:var(--muted); font-size:13px; line-height:1.5; }
+.backupCardList li>span { flex-shrink:0; }
+@media(max-width:700px) { .backupPanels { grid-template-columns:1fr; } .backupCardList li { flex-direction:column; gap:6px; } }

@@ -104,6 +104,7 @@ export default function AppHeader() {
                   <Link href="/binders" onClick={() => setAccountOpen(false)}><VaultIcon name="binder" size={16} /> Binders</Link>
                   <Link href="/want-list" onClick={() => setAccountOpen(false)}><VaultIcon name="heart" size={16} /> Want list</Link>
                   <Link href="/transactions" onClick={() => setAccountOpen(false)}><VaultIcon name="chart" size={16} /> Purchases &amp; sales</Link>
+                  <Link href="/backup" onClick={() => setAccountOpen(false)}><VaultIcon name="arrow" size={16} /> Collection backup</Link>
                   <Link href="/account" onClick={() => setAccountOpen(false)}><VaultIcon name="shield" size={16} /> Account settings</Link>
                   {adminUserId === user.id ? <Link href="/admin" onClick={() => setAccountOpen(false)}><VaultIcon name="shield" size={16} /> Admin</Link> : null}
                   <button type="button" onClick={handleLogout} disabled={signingOut}><VaultIcon name="logout" size={16} /> {signingOut ? "Signing out…" : "Log Out"}</button>

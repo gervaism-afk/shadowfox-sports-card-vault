@@ -126,10 +126,11 @@ export async function loadCards(): Promise<CardRecord[]> {
   return data.map(rowToCard);
 }
 
-export async function saveCard(card: CardRecord): Promise<CardRecord> {
+export async function saveCard(card: CardRecord, restore?: { expectedUserId: string; insertOnly: true }): Promise<CardRecord> {
   if (!Number.isInteger(card.quantity) || card.quantity < 1) throw new Error("Quantity must be a whole number of at least 1");
   if (!Number.isFinite(card.estimatedValueCad) || card.estimatedValueCad < 0) throw new Error("Estimated value must be zero or more");
   const user = await requireUser();
+  if (restore && restore.expectedUserId !== user.id) throw new Error("Your account changed. Review the backup again before restoring.");
   const uploadedPaths: string[] = [];
   let saved: CardRecord;
   try {
@@ -143,7 +144,9 @@ export async function saveCard(card: CardRecord): Promise<CardRecord> {
     updatedAt: new Date().toISOString(),
   };
 
-    const { data, error } = await supabase!.from("cards").upsert(cardToRow(next, user.id)).select("*").single();
+    const row = cardToRow(next, user.id);
+    const query = restore?.insertOnly ? supabase!.from("cards").insert(row) : supabase!.from("cards").upsert(row);
+    const { data, error } = await query.select("*").single();
     if (error) throw error;
     saved = rowToCard(data as any);
   } catch (error) {
