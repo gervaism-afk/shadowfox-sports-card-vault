@@ -1,12 +1,16 @@
 import { CardRecord } from "@/lib/types";
 
 export function duplicateKey(card: CardRecord) {
+  // MVP's back prints "MVP Hockey" while its front only prints "MVP".
+  // Normalize this known alias without merging other sets or variants.
+  const set = card.set.trim().toLowerCase();
+  const canonicalSet = card.sport === "Hockey" && card.brand.trim().toLowerCase() === "upper deck" && set === "mvp hockey" ? "mvp" : set;
   return [
     card.sport,
     card.player.trim().toLowerCase(),
     card.year.trim(),
     card.brand.trim().toLowerCase(),
-    card.set.trim().toLowerCase(),
+    canonicalSet,
     card.subset.trim().toLowerCase(),
     card.cardNumber.trim().toLowerCase(),
     card.parallel.trim().toLowerCase(),

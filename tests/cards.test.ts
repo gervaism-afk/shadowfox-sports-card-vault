@@ -55,3 +55,12 @@ test("duplicate identity distinguishes autographed and ordinary cards", () => {
   const card = { ...emptyCard(), player: "John Smith" };
   assert.notEqual(duplicateKey(card), duplicateKey({ ...card, autograph: true }));
 });
+
+test("Upper Deck MVP front and back set names match without merging variants", () => {
+  const card = { ...emptyCard(), sport: "Hockey" as const, player: "Nick Suzuki", year: "2021-22", brand: "Upper Deck", set: "MVP", cardNumber: "87" };
+  assert.equal(duplicateKey(card), duplicateKey({ ...card, set: "MVP Hockey" }));
+  for (const patch of [{ parallel: "Silver Script" }, { cardNumber: "88" }, { year: "2022-23" }, { set: "MVP Super Script" }]) {
+    assert.notEqual(duplicateKey(card), duplicateKey({ ...card, ...patch }));
+  }
+  assert.notEqual(duplicateKey({ ...card, brand: "Other" }), duplicateKey({ ...card, brand: "Other", set: "MVP Hockey" }));
+});
