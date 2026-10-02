@@ -3,13 +3,6 @@
 import { useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
-async function lookupEmailByUsername(username: string) {
-  if (!supabase) throw new Error("Supabase not configured");
-  const { data, error } = await supabase.from("profiles").select("email").ilike("username", username).limit(1).maybeSingle();
-  if (error) throw error;
-  return data?.email || null;
-}
-
 export default function LoginPanel() {
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [identifier, setIdentifier] = useState("");
@@ -24,12 +17,7 @@ export default function LoginPanel() {
     try {
       setBusy(true);
       setStatus("Signing in…");
-      let loginEmail = identifier.trim();
-      if (!identifier.includes("@")) {
-        const resolved = await lookupEmailByUsername(identifier.trim());
-        if (!resolved) throw new Error("Username not found.");
-        loginEmail = resolved;
-      }
+      const loginEmail = identifier.trim();
       const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
       if (error) throw error;
       setStatus("Signed in.");
@@ -49,10 +37,6 @@ export default function LoginPanel() {
       if (!name) throw new Error("Username is required.");
       if (!email.trim()) throw new Error("Email is required.");
       if (password.length < 6) throw new Error("Password must be at least 6 characters.");
-
-      const { data: exists, error: existsError } = await supabase.from("profiles").select("username").ilike("username", name).limit(1);
-      if (existsError) throw existsError;
-      if ((exists || []).length > 0) throw new Error("Username is already taken.");
 
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -77,7 +61,7 @@ export default function LoginPanel() {
     try {
       setBusy(true);
       setStatus("Sending reset link…");
-      const targetEmail = identifier.includes("@") ? identifier.trim() : email.trim();
+      const targetEmail = email.trim();
       if (!targetEmail) throw new Error("Enter your email address first.");
       const redirectTo = `${window.location.origin}/reset-password`;
       const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, { redirectTo });
@@ -101,8 +85,8 @@ export default function LoginPanel() {
 
       {mode === "login" ? (
         <div className="authForm">
-          <label className="label">Username or Email</label>
-          <input className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="username or email" />
+          <label className="label">Email</label>
+          <input className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} type="email" placeholder="email" />
           <label className="label">Password</label>
           <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password" />
           <button className="btn primary" disabled={busy} onClick={handleLogin}>Log In</button>

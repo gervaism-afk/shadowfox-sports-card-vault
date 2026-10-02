@@ -6,7 +6,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 type UserRow = {
   id: string;
-  full_name: string | null;
+  username: string | null;
   email?: string | null;
   role: "user" | "admin";
   created_at: string;
@@ -20,23 +20,23 @@ type Stats = {
 
 type UserCard = {
   id: string;
-  player_name: string | null;
+  player: string | null;
   brand: string | null;
-  year: number | null;
+  year: string | null;
   card_number?: string | null;
   team: string | null;
-  estimated_value: number | null;
+  estimated_value_cad: number | null;
   notes: string | null;
 };
 
 type EditableCard = {
   id: string;
-  player_name: string;
+  player: string;
   brand: string;
   year: string;
   card_number: string;
   team: string;
-  estimated_value: string;
+  estimated_value_cad: string;
   notes: string;
 };
 
@@ -45,12 +45,12 @@ const supabase = createBrowserSupabaseClient();
 function toEditable(card: UserCard): EditableCard {
   return {
     id: card.id,
-    player_name: card.player_name ?? "",
+    player: card.player ?? "",
     brand: card.brand ?? "",
     year: card.year ? String(card.year) : "",
     card_number: card.card_number ?? "",
     team: card.team ?? "",
-    estimated_value: card.estimated_value != null ? String(card.estimated_value) : "",
+    estimated_value_cad: card.estimated_value_cad != null ? String(card.estimated_value_cad) : "",
     notes: card.notes ?? "",
   };
 }
@@ -74,6 +74,7 @@ export default function AdminDashboard() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   async function getAccessToken() {
+    if (!supabase) return null;
     const { data: sessionData } = await supabase.auth.getSession();
     return sessionData.session?.access_token ?? null;
   }
@@ -100,7 +101,7 @@ export default function AdminDashboard() {
   }
 
   async function apiFetch(url: string, options: RequestInit = {}) {
-    const currentToken = token ?? (await getAccessToken());
+    const currentToken = await getAccessToken();
     if (!currentToken) throw new Error("Missing access token");
     const headers = new Headers(options.headers || {});
     headers.set("Authorization", `Bearer ${currentToken}`);
@@ -173,12 +174,12 @@ export default function AdminDashboard() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        player_name: editingCard.player_name,
+        player: editingCard.player,
         brand: editingCard.brand,
-        year: editingCard.year ? Number(editingCard.year) : null,
+        year: editingCard.year,
         card_number: editingCard.card_number,
         team: editingCard.team,
-        estimated_value: editingCard.estimated_value ? Number(editingCard.estimated_value) : null,
+        estimated_value_cad: editingCard.estimated_value_cad ? Number(editingCard.estimated_value_cad) : null,
         notes: editingCard.notes,
       }),
     });
@@ -235,7 +236,7 @@ export default function AdminDashboard() {
           <tbody>
             {loading ? <tr><td colSpan={5}>Loading users...</td></tr> : users.length === 0 ? <tr><td colSpan={5}>No users found.</td></tr> : users.map((user) => (
               <tr key={user.id}>
-                <td>{user.full_name || "Unnamed User"}</td>
+                <td>{user.username || "Unnamed User"}</td>
                 <td>{user.email || "-"}</td>
                 <td style={{ textTransform: "capitalize" }}>{user.role}</td>
                 <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}</td>
@@ -265,8 +266,8 @@ export default function AdminDashboard() {
               {selectedUserCards.map((card) => (
                 <div key={card.id} className="sfListCard">
                   <div>
-                    <div className="sfListTitle">{[card.year, card.brand, card.player_name].filter(Boolean).join(" ")}</div>
-                    <div className="sfMuted">{card.team || "-"} · ${Number(card.estimated_value || 0).toLocaleString()}</div>
+                    <div className="sfListTitle">{[card.year, card.brand, card.player].filter(Boolean).join(" ")}</div>
+                    <div className="sfMuted">{card.team || "-"} · ${Number(card.estimated_value_cad || 0).toLocaleString()}</div>
                     {card.notes ? <div className="sfSubtle">{card.notes}</div> : null}
                   </div>
                   <div className="sfInlineActions">
@@ -288,12 +289,12 @@ export default function AdminDashboard() {
               <button className="sfGhostBtn" onClick={() => setEditingCard(null)}>Close</button>
             </div>
             <div className="sfFormGrid">
-              <input className="sfInput" value={editingCard.player_name} onChange={(e) => setEditingCard({ ...editingCard, player_name: e.target.value })} placeholder="Player" />
+              <input className="sfInput" value={editingCard.player} onChange={(e) => setEditingCard({ ...editingCard, player: e.target.value })} placeholder="Player" />
               <input className="sfInput" value={editingCard.brand} onChange={(e) => setEditingCard({ ...editingCard, brand: e.target.value })} placeholder="Brand" />
               <input className="sfInput" value={editingCard.year} onChange={(e) => setEditingCard({ ...editingCard, year: e.target.value })} placeholder="Year" />
               <input className="sfInput" value={editingCard.card_number} onChange={(e) => setEditingCard({ ...editingCard, card_number: e.target.value })} placeholder="Card #" />
               <input className="sfInput" value={editingCard.team} onChange={(e) => setEditingCard({ ...editingCard, team: e.target.value })} placeholder="Team" />
-              <input className="sfInput" value={editingCard.estimated_value} onChange={(e) => setEditingCard({ ...editingCard, estimated_value: e.target.value })} placeholder="Estimated value" />
+              <input className="sfInput" value={editingCard.estimated_value_cad} onChange={(e) => setEditingCard({ ...editingCard, estimated_value_cad: e.target.value })} placeholder="Estimated value" />
             </div>
             <textarea className="sfTextarea" value={editingCard.notes} onChange={(e) => setEditingCard({ ...editingCard, notes: e.target.value })} placeholder="Notes" rows={4} />
             <div className="sfInlineActions right">

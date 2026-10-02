@@ -20,6 +20,7 @@ export default function AdminContentPage() {
   const [content, setContent] = useState<Record<string, string>>({ ...PAGE_CONTENT_DEFAULTS.homepage });
 
   async function getAccessToken() {
+    if (!supabase) return null;
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token ?? null;
   }
@@ -54,7 +55,7 @@ export default function AdminContentPage() {
   }
 
   async function apiFetch(url: string, options: RequestInit = {}) {
-    const currentToken = token ?? (await getAccessToken());
+    const currentToken = await getAccessToken();
     if (!currentToken) throw new Error("Missing access token");
     const headers = new Headers(options.headers || {});
     headers.set("Authorization", `Bearer ${currentToken}`);
@@ -66,6 +67,7 @@ export default function AdminContentPage() {
     setMessage("");
     try {
       const res = await apiFetch(`/api/admin/content/${nextPage}`);
+      if (!res.ok) throw new Error("Failed to load content");
       const json = await res.json();
       setContent({ ...(PAGE_CONTENT_DEFAULTS[nextPage] as Record<string, string>), ...(json?.content || {}) });
     } catch (error) {

@@ -9,6 +9,9 @@ export async function requireAdminApi(req: Request) {
   }
 
   const token = authHeader.replace('Bearer ', '').trim();
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false as const, status: 503, error: 'Authentication is not configured' };
+  }
   const supabase = createAdminClient();
 
   const {

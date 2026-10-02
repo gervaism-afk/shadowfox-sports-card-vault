@@ -1,0 +1,158 @@
+import { test, expect, type Page } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+
+const userId = '11111111-1111-4111-8111-111111111111';
+const user = { id: userId, email: 'collector@example.test', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {} };
+function row(patch: Record<string, unknown> = {}) {
+  return { id: randomUUID(), user_id: userId, sport: 'Hockey', player: 'Test Player', year: '2023', brand: 'Upper Deck', set_name: '', subset: '', card_number: '', team: '', rookie: false, autograph: false, relic_patch: false, serial_number: '', parallel: '', grading_company: '', grade: '', quantity: 1, estimated_value_cad: 0, notes: '', front_image_url: '', back_image_url: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...patch };
+}
+async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
+  await page.route('**/api/identify', route => route.fulfill({ status: 503, json: { error: 'AI identification is not configured.' } }));
+  const rows = [...initial];
+  const calls: string[] = [];
+  const token = [Buffer.from('{"alg":"HS256"}').toString('base64url'), Buffer.from(JSON.stringify({ sub: userId, exp: Math.floor(Date.now() / 1000) + 3600, role: 'authenticated' })).toString('base64url'), 'test-only-signature'].join('.');
+  await page.addInitScript(({ token, user }) => {
+    localStorage.setItem('sb-127-auth-token', JSON.stringify({ access_token: token, refresh_token: 'fixture-refresh-token', expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, token_type: 'bearer', user }));
+  }, { token, user });
+  await page.route('http://127.0.0.1:54321/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const headers = { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' };
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 200, headers, body: '{}' });
+    calls.push(`${request.method()} ${url.pathname}`);
+    if (url.pathname === '/auth/v1/user') return route.fulfill({ headers, json: user });
+    if (url.pathname === '/rest/v1/card_image_cleanup') return route.fulfill({ headers, json: [] });
+    if (url.pathname.startsWith('/storage/v1/object/')) return route.fulfill({ headers, json: { Key: url.pathname } });
+    if (url.pathname === '/rest/v1/rpc/increment_card_quantity') {
+      const { card_id, amount } = request.postDataJSON();
+      const card = rows.find((card) => card.id === card_id)!;
+      card.quantity += amount;
+      return route.fulfill({ headers, json: card });
+    }
+    if (url.pathname === '/rest/v1/cards') {
+      if (request.method() === 'POST') {
+        const saved = request.postDataJSON();
+        const index = rows.findIndex((card) => card.id === saved.id);
+        if (index < 0) rows.unshift(saved); else rows[index] = saved;
+        return route.fulfill({ headers, json: saved });
+      }
+      const offset = Number(url.searchParams.get('offset') || 0);
+      const limit = Math.min(Number(url.searchParams.get('limit') || 100), 100);
+      return route.fulfill({ headers, json: rows.slice(offset, offset + limit) });
+    }
+    return route.fulfill({ status: 500, headers, json: { message: `Unexpected fixture request ${url.pathname}` } });
+  });
+  return { rows, calls };
+}
+async function cardImage(page: Page, player = 'CONNOR MCDAVID', year = '2023', brand = 'Upper Deck', number = '201') {
+  const url = await page.evaluate(({ player, year, brand, number }) => {
+    const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 800;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = 'white'; context.fillRect(0, 0, 1200, 800);
+    context.fillStyle = 'black'; context.font = 'bold 60px Arial';
+    context.fillText(player, 60, 150); context.fillText(`${year} ${brand}`, 60, 300); context.fillText(`Young Guns #${number}`, 60, 450);
+    return canvas.toDataURL('image/png');
+  }, { player, year, brand, number });
+  return { name: 'card.png', mimeType: 'image/png', buffer: Buffer.from(url.split(',')[1], 'base64') };
+}
+
+test('real local OCR, sold-price estimate, save, and collection navigation', async ({ page }) => {
+  const backend = await fixture(page);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const externalOcr: string[] = [];
+  page.on('request', (request) => { if (/jsdelivr|tessdata|projectnaptha/.test(request.url())) externalOcr.push(request.url()); });
+  await page.goto('/scan');
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await expect(page.getByRole('button', { name: 'Save Card', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor Mcdavid', { timeout: 60000 });
+  await expect(page.getByLabel('Year', { exact: true })).toHaveValue('2023');
+  await expect(page.getByLabel('Brand', { exact: true })).toHaveValue('Upper Deck');
+  await expect(page.getByLabel('Card Number', { exact: true })).toHaveValue('201');
+  await page.getByText('Estimate from sold prices', { exact: true }).click();
+  await page.getByLabel('Sold prices in CAD').fill('20\n30\n25');
+  await page.getByRole('button', { name: 'Apply Estimate' }).click();
+  await expect(page.getByLabel('Estimated Value CAD')).toHaveValue('25');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => scrollTo(0, 0));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/shadowfox-scan-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({ path: '/tmp/shadowfox-scan-desktop.png', fullPage: true });
+  await page.getByRole('button', { name: 'Save Card', exact: true }).click();
+  await expect(page).toHaveURL(/\/collection$/);
+  expect(backend.rows).toHaveLength(1);
+  expect(backend.rows[0].estimated_value_cad).toBe(25);
+  expect(backend.rows[0].front_image_url).toContain('/storage/v1/object/public/card-images/');
+  expect(externalOcr).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('a second scan clears previous values; duplicate quantity uses atomic RPC', async ({ page }) => {
+  const backend = await fixture(page, [row({ player: 'John Smith', year: '2024', brand: 'Topps', card_number: '100', subset: 'Young Guns', sport: 'Hockey', rookie: true })]);
+  await page.goto('/scan');
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor Mcdavid', { timeout: 60000 });
+  await expect(page.getByRole('button', { name: 'Save Card', exact: true })).toBeEnabled();
+  await page.getByLabel('Notes', { exact: true }).fill('Old scan notes');
+  await page.getByLabel('Estimated Value CAD').fill('999');
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page, 'JOHN SMITH', '2024', 'Topps', '100'));
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue('John Smith', { timeout: 60000 });
+  await expect(page.getByLabel('Notes', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Estimated Value CAD')).toHaveValue('0');
+  await page.getByRole('button', { name: 'Save Card', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Add to Existing Quantity' })).toBeVisible();
+  await page.getByRole('button', { name: 'Add to Existing Quantity' }).click();
+  await expect(page).toHaveURL(/\/collection$/);
+  expect(backend.rows[0].quantity).toBe(2);
+  expect(backend.calls).toContain('POST /rest/v1/rpc/increment_card_quantity');
+  expect(backend.calls).not.toContain('POST /rest/v1/cards');
+});
+
+test('collection totals and JSON export include rows beyond the API cap', async ({ page }) => {
+  const backend = await fixture(page, Array.from({ length: 1105 }, (_, index) => row({ player: `Player ${index}`, estimated_value_cad: 1 })));
+  await page.goto('/collection');
+  await expect(page.locator('.kpiValue').first()).toHaveText('1105');
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export JSON' }).click();
+  const file = await downloaded;
+  const exported = JSON.parse(await readFile((await file.path())!, 'utf8'));
+  expect(exported).toHaveLength(1105);
+  expect(backend.calls.filter((call) => call === 'GET /rest/v1/cards').length).toBeGreaterThan(11);
+});
+
+test('invalid image reports a useful error and leaves manual entry usable', async ({ page }) => {
+  await fixture(page);
+  await page.goto('/scan');
+  await page.getByLabel('Upload front image').setInputFiles({ name: 'file.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') });
+  await expect(page.getByText('Choose a JPEG, PNG, or WebP image.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save Card', exact: true })).toBeEnabled();
+});
+
+
+test('AI fills editable details, combines front and back, and saves corrections', async ({ page }) => {
+  const backend = await fixture(page);
+  const requests: any[] = [];
+  await page.route('**/api/identify', async route => {
+    requests.push(route.request().postDataJSON());
+    expect(route.request().headers().authorization).toContain('Bearer ');
+    await route.fulfill({ json: { fields: { sport: 'Hockey', player: 'Connor McDavid', year: '2023-24', brand: 'Upper Deck', set: 'Series One', subset: 'Young Guns', cardNumber: '201', parallel: requests.length > 1 ? 'Clear Cut' : null }, warnings: ['Confirm the parallel using the back photo.'], evidence: 'Visible Young Guns #201' } });
+  });
+  await page.goto('/scan');
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor McDavid');
+  await expect(page.getByLabel('Set', { exact: true })).toHaveValue('Series One');
+  await expect(page.getByText('Confirm the parallel using the back photo.')).toBeVisible();
+  await page.getByLabel('Upload back image').setInputFiles(await cardImage(page));
+  await page.getByRole('button', { name: 'Identify Again' }).click();
+  await expect(page.getByLabel('Parallel', { exact: true })).toHaveValue('Clear Cut');
+  expect(requests[1].frontImage).toMatch(/^data:image/);
+  expect(requests[1].backImage).toMatch(/^data:image/);
+  await page.getByLabel('Year', { exact: true }).fill('2022-23');
+  await page.getByRole('button', { name: 'Save Card', exact: true }).click();
+  await expect(page).toHaveURL(/\/collection$/);
+  expect(backend.rows[0].year).toBe('2022-23');
+  expect(backend.rows[0].set_name).toBe('Series One');
+});

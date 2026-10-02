@@ -1,0 +1,94 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+
+const db = new PGlite();
+const a = '11111111-1111-4111-8111-111111111111';
+const b = '22222222-2222-4222-8222-222222222222';
+await db.exec(`
+  create role anon; create role authenticated; create role service_role bypassrls;
+  create schema auth; create schema storage;
+  create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
+  create function auth.uid() returns uuid language sql stable as $$
+    select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+  $$;
+  create table storage.buckets (id text primary key, name text, public boolean);
+  create table storage.objects (id uuid default gen_random_uuid(), bucket_id text, name text);
+  alter table storage.objects enable row level security;
+  create function storage.foldername(text) returns text[] language sql as $$ select string_to_array($1, '/') $$;
+  grant usage on schema public, auth, storage to anon, authenticated, service_role;
+  grant execute on function auth.uid() to anon, authenticated, service_role;
+  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+`);
+const schema = (await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'))
+  .replace('create extension if not exists pgcrypto;', '');
+await db.exec(schema);
+await db.exec(`insert into auth.users values ('${a}', 'alice@example.test', '{"username":"alice","role":"admin"}'),
+  ('${b}', 'bob@example.test', '{"username":"bob"}');`);
+const rows = await db.query('select username, role from public.profiles order by username');
+assert.deepEqual(rows.rows, [{username:'alice',role:'user'},{username:'bob',role:'user'}]);
+console.log('PASS signup creates profiles and ignores user-provided admin role');
+
+await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${a}',false);`);
+assert.equal((await db.query('select count(*)::int as n from public.profiles')).rows[0].n, 1);
+assert.equal((await db.query('select email from public.profiles')).rows[0].email, 'alice@example.test');
+console.log('PASS authenticated users can read only their own profile');
+await assert.rejects(db.exec(`update public.profiles set role='admin' where id='${a}'`), /permission denied/);
+await assert.rejects(db.exec(`insert into public.profiles(id,username,email,role) values('${a}','x','x@example.test','admin')`), /permission denied/);
+await assert.rejects(db.exec(`update public.profiles set email='stolen@example.test' where id='${a}'`), /permission denied/);
+console.log('PASS direct role changes, profile insertion, and email spoofing are denied');
+await db.exec(`update public.profiles set username='alice_new' where id='${a}'`);
+assert.equal((await db.query('select username from public.profiles')).rows[0].username, 'alice_new');
+await db.exec(`update public.profiles set username='stolen' where id='${b}'`);
+console.log('PASS own username updates work while other users are protected');
+await assert.rejects(db.query('select public.admin_dashboard()'), /Not authorized/);
+console.log('PASS regular users cannot access the privileged dashboard');
+await db.exec('reset role; set role anon;');
+await assert.rejects(db.query('select email from public.profiles'), /permission denied/);
+await assert.rejects(db.query('select public.admin_dashboard()'), /permission denied/);
+await assert.rejects(db.query('select private.create_user_profile()'), /permission denied/);
+console.log('PASS anonymous clients cannot read emails or invoke privileged helpers');
+await db.exec(`reset role; set role service_role; update public.profiles set role='admin' where id='${a}'; reset role;`);
+const migration = await readFile(new URL('../supabase/migrations/20261002012728_harden_profiles.sql', import.meta.url), 'utf8');
+await db.exec(`alter table auth.users disable trigger shadowfox_create_user_profile;
+  insert into auth.users values ('33333333-3333-4333-8333-333333333333','legacy@example.test','{}');
+  alter table auth.users enable trigger shadowfox_create_user_profile;`);
+await db.exec(migration);
+assert.equal((await db.query("select role from public.profiles where email='legacy@example.test'")).rows[0].role, 'user');
+console.log('PASS missing profiles for existing accounts are backfilled');
+assert.equal((await db.query(`select role from public.profiles where id='${a}'`)).rows[0].role, 'admin');
+console.log('PASS trusted server can assign roles and reapplying hardening preserves them');
+await db.exec(`update auth.users set email='alice.updated@example.test' where id='${a}'`);
+assert.equal((await db.query(`select email,role from public.profiles where id='${a}'`)).rows[0].email, 'alice.updated@example.test');
+assert.equal((await db.query(`select role from public.profiles where id='${a}'`)).rows[0].role, 'admin');
+console.log('PASS confirmed auth email sync preserves the role');
+await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${a}',false);`);
+assert.equal((await db.query('select public.admin_dashboard() as dashboard')).rows[0].dashboard.totalUsers, 3);
+console.log('PASS legitimate admin dashboard access works');
+await db.exec('reset role;');
+
+const cardId = '44444444-4444-4444-8444-444444444444';
+const image = `https://project.supabase.co/storage/v1/object/public/card-images/${a}/front/test.jpg`;
+await db.exec(`insert into public.cards(id,user_id,player,front_image_url) values('${cardId}','${a}','Test Player','${image}');`);
+await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${a}',false);`);
+await Promise.all(Array.from({ length: 12 }, () => db.query(`select public.increment_card_quantity('${cardId}',1)`)));
+assert.equal((await db.query(`select quantity from public.cards where id='${cardId}'`)).rows[0].quantity, 13);
+await assert.rejects(db.query(`select public.increment_card_quantity('${cardId}',0)`), /positive/);
+await db.exec(`select set_config('request.jwt.claim.sub','${b}',false);`);
+await assert.rejects(db.query(`select public.increment_card_quantity('${cardId}',1)`), /Card not found/);
+console.log('PASS atomic quantity additions, validation, and owner isolation');
+await db.exec(`select set_config('request.jwt.claim.sub','${a}',false);`);
+await db.exec(`update public.cards set front_image_url='' where id='${cardId}'`);
+assert.equal((await db.query('select image_url from public.card_image_cleanup')).rows[0].image_url, image);
+await assert.rejects(db.exec(`insert into public.card_image_cleanup(user_id,image_url) values('${a}','fake')`), /permission denied/);
+await db.exec(`select set_config('request.jwt.claim.sub','${b}',false);`);
+assert.equal((await db.query('select count(*)::int as n from public.card_image_cleanup')).rows[0].n, 0);
+console.log('PASS replacement queues cleanup and clients cannot enqueue or read other owners’ jobs');
+await db.exec(`reset role; update public.cards set front_image_url='${image}' where id='${cardId}';`);
+await db.exec('delete from public.card_image_cleanup;');
+await db.exec(`begin; delete from public.cards where id='${cardId}'; rollback;`);
+assert.equal((await db.query('select count(*)::int as n from public.card_image_cleanup')).rows[0].n, 0);
+await db.exec(`delete from public.cards where id='${cardId}'`);
+assert.equal((await db.query('select count(*)::int as n from public.card_image_cleanup')).rows[0].n, 1);
+console.log('PASS deletion queues cleanup transactionally and rollbacks preserve images');
+await db.close();
