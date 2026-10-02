@@ -83,7 +83,7 @@ export default function AppHeader() {
       <header className="compactHeader">
         <div className="compactHeaderInner">
           <Link href="/" className="brandWordmark" aria-label="ShadowFox home">
-            <img className="brandRealLogo" src="/shadowfox-logo.jpg" width={64} height={64} alt="" />
+            <img className="brandRealLogo" src="/shadowfox-logo.png" width={64} height={64} alt="" />
             <span>
               <span className="brandTitle">ShadowFox<span className="brandDot">.</span></span>
               <span className="brandSubtitle">Sports Card Vault</span>

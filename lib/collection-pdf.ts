@@ -29,7 +29,7 @@ export function createCollectionPdf(cards: CardRecord[], options: CollectionPdfO
     while (index < group.cards.length) {
       if (pages++) doc.addPage(); sheet++;
       doc.setFillColor(20, 20, 18); doc.rect(0, 0, width, 78, "F");
-      if (logo) doc.addImage(logo, "JPEG", margin, 10, 56, 56);
+      if (logo) doc.addImage(logo, logo.startsWith("data:image/png") ? "PNG" : "JPEG", margin, 10, 56, 56);
       doc.setFont("helvetica", "bold"); doc.setFontSize(19); doc.setTextColor(244, 240, 230);
       doc.text("ShadowFox Cards", logo ? margin + 70 : margin, 33);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(212, 176, 119);

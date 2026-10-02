@@ -10,7 +10,7 @@ export default function CollectionPdfExport({ cards, filtered, disabled, kind = 
     setBusy(true); setError("");
     try {
       const { createCollectionPdf } = await import("@/lib/collection-pdf");
-      const response = await fetch("/shadowfox-logo.jpg");
+      const response = await fetch("/shadowfox-logo.png");
       if (!response.ok) throw new Error("Could not load your logo. Try again.");
       const blob = await response.blob();
       const logo = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(blob); });

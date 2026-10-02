@@ -17,7 +17,7 @@ export default function ShopLandingPage() {
   return <div className="storefront">
     <a className="skipLink" href="#shop-main">Skip to content</a>
     <header className="storeHeader">
-      <a className="storeBrand" href="#" aria-label="ShadowFox Cards home"><Image src="/shadowfox-logo.jpg" width={54} height={54} alt="" priority /><span>ShadowFox<span className="storeGold"> Cards</span></span></a>
+      <a className="storeBrand" href="#" aria-label="ShadowFox Cards home"><Image src="/shadowfox-logo.png" width={54} height={54} alt="" priority /><span>ShadowFox<span className="storeGold"> Cards</span></span></a>
       <a className="storeAppLink" href={vaultUrl}>Card Vault <VaultIcon name="arrow" size={16} /></a>
     </header>
     <main id="shop-main" className="storeMain" tabIndex={-1}>
@@ -32,7 +32,7 @@ export default function ShopLandingPage() {
           </div>
           <p className="storePurchaseNote">All purchases and checkout take place on eBay.</p>
         </div>
-        <div className="storeBrandDisplay" aria-hidden="true"><div className="storeBrandRing"><Image src="/shadowfox-logo.jpg" width={400} height={400} priority alt="" sizes="(max-width: 700px) 240px, 400px" /></div><span>ShadowFox Cards</span></div>
+        <div className="storeBrandDisplay" aria-hidden="true"><div className="storeBrandRing"><Image src="/shadowfox-logo.png" width={400} height={400} priority alt="" sizes="(max-width: 700px) 240px, 400px" /></div><span>ShadowFox Cards</span></div>
       </section>
       <section className="storeFeatures" aria-label="Shop and collect">
         <div><span className="storeFeatureNumber">01</span><h2>Hockey cards</h2><p>Explore our hockey card listings on eBay.</p></div>
