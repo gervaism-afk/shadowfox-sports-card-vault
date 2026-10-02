@@ -63,4 +63,6 @@ test("Upper Deck MVP front and back set names match without merging variants", (
     assert.notEqual(duplicateKey(card), duplicateKey({ ...card, ...patch }));
   }
   assert.notEqual(duplicateKey({ ...card, brand: "Other" }), duplicateKey({ ...card, brand: "Other", set: "MVP Hockey" }));
+  assert.equal(duplicateKey({ ...card, team: "Canadiens" }), duplicateKey({ ...card, team: "Montreal Canadiens" }));
+  assert.notEqual(duplicateKey({ ...card, team: "Canadiens" }), duplicateKey({ ...card, team: "Toronto Maple Leafs" }));
 });

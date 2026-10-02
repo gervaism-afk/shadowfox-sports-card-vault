@@ -5,6 +5,8 @@ export function duplicateKey(card: CardRecord) {
   // Normalize this known alias without merging other sets or variants.
   const set = card.set.trim().toLowerCase();
   const canonicalSet = card.sport === "Hockey" && card.brand.trim().toLowerCase() === "upper deck" && set === "mvp hockey" ? "mvp" : set;
+  const team = card.team.trim().toLowerCase();
+  const canonicalTeam = card.sport === "Hockey" && team === "canadiens" ? "montreal canadiens" : team;
   return [
     card.sport,
     card.player.trim().toLowerCase(),
@@ -17,7 +19,7 @@ export function duplicateKey(card: CardRecord) {
     card.serialNumber.trim().toLowerCase(),
     card.gradingCompany.trim().toLowerCase(),
     card.grade.trim().toLowerCase(),
-    card.team.trim().toLowerCase(),
+    canonicalTeam,
     String(card.rookie), String(card.autograph), String(card.relicPatch),
   ].join("|");
 }
