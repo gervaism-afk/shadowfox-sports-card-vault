@@ -5,6 +5,7 @@ import { CardRecord, GradingCompany, Sport } from "@/lib/types";
 import CardSuggestionInput, { type CardSuggestion } from "@/components/CardSuggestionInput";
 import { useCardCatalog, useOwnedCardSuggestions } from "@/lib/catalog/client";
 import { matchesCatalogYear, normalizeOption, optionValues } from "@/lib/catalog/types";
+import { commonVariants } from '@/lib/catalog/variants';
 import ImagePicker from "@/components/ImagePicker";
 
 const gradingOptions: GradingCompany[] = ["", "PSA", "BGS", "SGC", "CGC", "Other"];
@@ -21,14 +22,16 @@ export default function CardForm({ value, onChange, showImageFields = true, want
   const products=(catalog?.sets||[]).filter(row=>(!value.brand||normalizeOption(row.brand)===normalizeOption(value.brand))&&matchesCatalogYear(row.year,value.year,value.sport));
   const fallbackBrands=value.sport==='Hockey'?['Upper Deck','O-Pee-Chee','Panini','Topps','Score','Fleer','Pacific']:['Topps','Bowman','Panini','Donruss','Upper Deck','Fleer','Leaf','Score','Pinnacle','Pacific'];
   const plain=(items:string[]):CardSuggestion[]=>optionValues(items).map(text=>({value:text}));
+  const common=commonVariants(value.sport,value.brand,value.set);
+  const variantOptions=(key: "subset"|"parallel")=>{const saved=plain(owned.filter(card=>normalizeOption(card.brand)===normalizeOption(value.brand)&&normalizeOption(card.year)===normalizeOption(value.year)&&normalizeOption(card.set)===normalizeOption(value.set)).map(card=>card[key]));return [...saved.map(option=>({...option,detail:"From your saved cards"})),...common[key].filter(text=>!saved.some(option=>normalizeOption(option.value)===normalizeOption(text))).map(text=>({value:text,detail:"Common term · verify on your card"}))];};
   const options:Record<string,CardSuggestion[]>={
     player:plain([...owned.map(card=>card.player),...(catalog?.players.map(player=>player.name)||[])]),
     team:plain([...owned.map(card=>card.team),...(catalog?.teams||[])]),
     year:years.map(year=>({value:year})),
     brand:plain([...fallbackBrands,...owned.map(card=>card.brand),...(catalog?.sets.map(row=>row.brand)||[])]),
     set:[...products.map(row=>({value:row.set,detail:[row.year,row.brand].filter(Boolean).join(' · '),key:row.url})),...plain([...owned.filter(card=>(!value.brand||normalizeOption(card.brand)===normalizeOption(value.brand))&&matchesCatalogYear(card.year,value.year,value.sport)).map(card=>card.set)]).filter(option=>!products.some(row=>normalizeOption(row.set)===normalizeOption(option.value)))],
-    subset:plain([...owned.filter(card=>!value.set||normalizeOption(card.set)===normalizeOption(value.set)).map(card=>card.subset)]),
-    parallel:plain([...owned.filter(card=>!value.set||normalizeOption(card.set)===normalizeOption(value.set)).map(card=>card.parallel)]),
+    subset:variantOptions("subset"),
+    parallel:variantOptions("parallel"),
   };
   function suggestion(key:'player'|'team'|'year'|'brand'|'set'|'subset'|'parallel',label:string){return <CardSuggestionInput id={`${id}-${key}`} label={label} value={value[key]} options={options[key]} onChange={next=>setField(key,next)} onSelect={key==='set'?option=>{const product=products.find(row=>row.url===option.key);onChange({...value,set:option.value,...(product&&!value.brand?{brand:product.brand}:{}),...(product&&(!value.year||(value.sport==='Hockey'&&/^\d{4}$/.test(value.year)))?{year:product.year}:{})});}:undefined}/>;}
   return (
@@ -40,6 +43,7 @@ export default function CardForm({ value, onChange, showImageFields = true, want
       {suggestion("brand","Brand")}
       {suggestion("set","Set")}
       {suggestion("subset","Subset")}
+      <p className="helperText fieldBlockWide">Subset and parallel are optional. Suggestions include common terms, not a complete checklist for this release. Choose only what appears on your card; leave blank for an ordinary base card or type an unlisted variation.</p>
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-cardNumber`}> Card Number</label><input id={`${id}-cardNumber`} className="input" value={value.cardNumber} onChange={(e) => setField("cardNumber", e.target.value)} /></div>
       {suggestion("team","Team")}
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-serialNumber`}> Serial Number</label><input id={`${id}-serialNumber`} className="input" value={value.serialNumber} onChange={(e) => setField("serialNumber", e.target.value)} /></div>
