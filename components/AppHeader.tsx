@@ -101,6 +101,7 @@ export default function AppHeader() {
                 </button>
                 {accountOpen ? <div className="accountDropdown" id="account-dropdown">
                   <div className="accountDropdownIdentity"><span className="eyebrow">Your account</span><span>{user.email || "Collector"}</span></div>
+                  <Link href="/sets" onClick={() => setAccountOpen(false)}><VaultIcon name="grid" size={16} /> Set completion</Link>
                   <Link href="/binders" onClick={() => setAccountOpen(false)}><VaultIcon name="binder" size={16} /> Binders</Link>
                   <Link href="/want-list" onClick={() => setAccountOpen(false)}><VaultIcon name="heart" size={16} /> Want list</Link>
                   <Link href="/transactions" onClick={() => setAccountOpen(false)}><VaultIcon name="chart" size={16} /> Purchases &amp; sales</Link>

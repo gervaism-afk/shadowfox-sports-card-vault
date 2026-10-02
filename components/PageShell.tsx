@@ -9,6 +9,7 @@ import VaultIcon from "@/components/VaultIcon";
 const sidebarLinks = [
   { href: "/", label: "Overview", icon: "home" },
   { href: "/collection", label: "All cards", icon: "grid" },
+  { href: "/sets", label: "Set completion", icon: "grid" },
   { href: "/binders", label: "Binders", icon: "binder" },
   { href: "/want-list", label: "Want list", icon: "heart" },
   { href: "/scan", label: "Scan a card", icon: "scan" },

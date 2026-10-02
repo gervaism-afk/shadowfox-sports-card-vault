@@ -14,7 +14,7 @@ export default function CollectionPdfExport({ cards, filtered, disabled, kind = 
       if (!response.ok) throw new Error("Could not load your logo. Try again.");
       const blob = await response.blob();
       const logo = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(blob); });
-      const pdf = createCollectionPdf(scope === "all" ? cards : filtered, { paper, kind, includeValues: kind === "wanted" ? false : values, scope: title ? `Binder: ${title}` : kind === "wanted" ? (scope === "all" ? "All wanted cards" : "Filtered wanted cards") : (scope === "all" ? "All cards" : filterDescription || "Filtered cards") }, logo);
+      const pdf = createCollectionPdf(scope === "all" ? cards : filtered, { paper, kind, includeValues: kind === "wanted" ? false : values, scope: title ? (kind === "wanted" ? `Checklist: ${title}` : `Binder: ${title}`) : kind === "wanted" ? (scope === "all" ? "All wanted cards" : "Filtered wanted cards") : (scope === "all" ? "All cards" : filterDescription || "Filtered cards") }, logo);
       pdf.save(kind === "wanted" ? "shadowfox-want-list.pdf" : title ? "shadowfox-binder-checklist.pdf" : scope === "filtered" && filterDescription ? "shadowfox-filtered-collection-checklist.pdf" : "shadowfox-collection-checklist.pdf");
       dialog.current?.close();
     } catch (e: any) { setError(/chunk/i.test(e.message) ? "The app has been updated. Refresh and try the PDF export again." : e.message || "Could not create the PDF. Try again."); }

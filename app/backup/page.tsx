@@ -87,7 +87,7 @@ export default function BackupPage() {
   return <AuthGate><PageShell title="Collection backup">
     <p className="vaultWelcomeCopy">Download your saved cards, quantities, variations, notes and CAD estimates. Include photos for a portable copy you can restore later.</p>
     <div className="buttonRow organizeNav"><Link className="btn ghost" href="/collection">Back to collection</Link><Link className="btn ghost" href="/account">Account settings</Link></div>
-    <p className="helperText">This backs up owned cards only. Binders, the want list, purchases and sales, and account settings are separate.</p>
+    <p className="helperText">This backs up owned cards only. Binders, set checklists, the want list, purchases and sales, and account settings are separate.</p>
     {loadError?<p className="workflowNotice" role="alert">{loadError} Refresh to try again.</p>:null}
     {error?<p className="workflowNotice" role="alert">{error}</p>:null}
     {status?<p className="workflowNotice" role="status">{status}</p>:null}

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {inflateSync} from 'node:zlib';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
@@ -11,7 +12,7 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
   await page.route('**/api/identify', route => route.fulfill({ status: 503, json: { error: 'AI identification is not configured.' } }));
   await page.route('**/api/catalog?**', route => { const sport=new URL(route.request().url()).searchParams.get('sport');return route.fulfill({json:{sport,teams:sport==='Hockey'?['Montréal Canadiens']:['Toronto Blue Jays'],players:[{name:sport==='Hockey'?'Nick Suzuki':'Vladimir Guerrero Jr.',team:''}],sets:[...(sport==='Hockey'?[{year:'2025-26',brand:'Upper Deck',set:'Series 2',url:'https://example.test/series-2'}]:[]),{year:sport==='Hockey'?'2026-27':'2026',brand:sport==='Hockey'?'Upper Deck':'Topps',set:sport==='Hockey'?'Tim Hortons':'Chrome',url:'https://example.test/checklist'}],sources:[]}}); });
   const rows = [...initial];
-  const binders: any[] = []; const memberships: any[] = []; const wants: any[] = []; const transactions: any[] = [];
+  const checklists:any[]=[];const binders: any[] = []; const memberships: any[] = []; const wants: any[] = []; const transactions: any[] = [];
   const calls: string[] = [];
   const token = [Buffer.from('{"alg":"HS256"}').toString('base64url'), Buffer.from(JSON.stringify({ sub: userId, exp: Math.floor(Date.now() / 1000) + 3600, role: 'authenticated' })).toString('base64url'), 'test-only-signature'].join('.');
   await page.addInitScript(({ token, user }) => {
@@ -34,8 +35,8 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
       card.quantity += amount;
       return route.fulfill({ headers, json: card });
     }
-    if (['/rest/v1/binders','/rest/v1/binder_cards','/rest/v1/want_list','/rest/v1/card_transactions'].includes(url.pathname)) {
-      const store = url.pathname.endsWith('/binders') ? binders : url.pathname.endsWith('/binder_cards') ? memberships : url.pathname.endsWith('/card_transactions') ? transactions : wants;
+    if (['/rest/v1/binders','/rest/v1/binder_cards','/rest/v1/want_list','/rest/v1/card_transactions','/rest/v1/set_checklists'].includes(url.pathname)) {
+      const store = url.pathname.endsWith('/set_checklists') ? checklists : url.pathname.endsWith('/binders') ? binders : url.pathname.endsWith('/binder_cards') ? memberships : url.pathname.endsWith('/card_transactions') ? transactions : wants;
       if (request.method() === 'GET') { const offset=Number(url.searchParams.get('offset')||0); const limit=Math.min(Number(url.searchParams.get('limit')||100),100);return route.fulfill({ headers, json: store.slice(offset,offset+limit) }); }
       if (request.method() === 'POST') {
         const body = request.postDataJSON(); const entry = { id: randomUUID(), created_at: new Date().toISOString(), ...body };
@@ -72,7 +73,7 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
     }
     return route.fulfill({ status: 500, headers, json: { message: `Unexpected fixture request ${url.pathname}` } });
   });
-  return { rows, calls, binders, memberships, wants, transactions };
+  return { rows, calls, binders, memberships, wants, transactions,checklists };
 }
 async function cardImage(page: Page, player = 'CONNOR MCDAVID', year = '2023', brand = 'Upper Deck', number = '201') {
   const url = await page.evaluate(({ player, year, brand, number }) => {
@@ -554,4 +555,14 @@ test('manual card suggestions cover both sports, keyboard choices and custom cor
   await page.getByLabel('Sport',{exact:true}).selectOption('Baseball');await page.getByLabel('Year',{exact:true}).fill('2026');await page.getByLabel('Brand',{exact:true}).fill('Topps');await page.getByLabel('Player',{exact:true}).fill('Vladimir');await page.getByRole('option',{name:'Vladimir Guerrero Jr.',exact:true}).click();await page.getByLabel('Set',{exact:true}).fill('Chr');await page.getByRole('option',{name:'Chrome',exact:false}).click();
   await page.getByLabel('Set',{exact:true}).fill('My unlisted set');await page.getByLabel('Parallel',{exact:true}).fill('Custom variation');await page.getByLabel('Notes',{exact:true}).click();await expect(page.getByLabel('Set',{exact:true})).toHaveValue('My unlisted set');
   await page.setViewportSize({width:320,height:850});await page.getByRole('button',{name:'Show brand suggestions'}).click();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+
+test('set checklists persist, exclude variants, print missing cards and update when acquired without changing other cards',async({page})=>{
+ page.setDefaultTimeout(10000);const records=[row({player:'Owned one',year:'2025-26',set_name:'Series 1',card_number:'1',quantity:2}),row({player:'Owned two',year:'2025-26',set_name:'Series 1',card_number:'2'}),row({player:'Different parallel',year:'2025-26',set_name:'Series 1',card_number:'3',parallel:'High Gloss'}),row({player:'Outside checklist',year:'2025-26',set_name:'Series 1',card_number:'99'})];const backend=await fixture(page,records);
+ await page.goto('/sets');await page.getByRole('button',{name:'Create checklist',exact:true}).click();await page.getByLabel('Use a set from your collection',{exact:true}).selectOption({label:'Hockey · 2025-26 · Upper Deck · Series 1'});await page.getByLabel('Checklist name',{exact:true}).fill('Test base set');await page.getByLabel('Last card number',{exact:true}).fill('3');await page.getByRole('button',{name:'Save checklist',exact:true}).click();await expect(page.getByText('67% complete',{exact:true})).toBeVisible();expect(backend.checklists).toHaveLength(1);await expect(page.getByText('2 of 3 card numbers owned',{exact:true})).toBeVisible();await expect(page.getByText(/1 matching collection entries/)).toBeVisible();
+ await page.getByLabel('Show',{exact:true}).selectOption('duplicates');await expect(page.locator('.setChecklistRows li')).toHaveCount(1);await expect(page.locator('.setChecklistRows')).toContainText('#1');await expect(page.locator('.setChecklistRows')).toContainText('Qty 2');await page.getByLabel('Show',{exact:true}).selectOption('missing');await expect(page.locator('.setChecklistRows li')).toHaveCount(1);await expect(page.locator('.setChecklistRows')).toContainText('#3');
+ await page.getByRole('button',{name:'Edit checklist',exact:true}).click();await page.getByLabel('Or paste specific card numbers',{exact:true}).fill('1 | Owned one\n2 | Owned two\n3 | Missing Player | Missing Team');await page.getByRole('button',{name:'Save checklist',exact:true}).click();await page.reload();await expect(page.getByText('67% complete',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Print / PDF',exact:true}).click();let pending=page.waitForEvent('download');await page.getByRole('button',{name:'Download PDF',exact:true}).click();const pdf=(await readFile((await(await pending).path())!)).toString('latin1');expect((pdf.match(/\/FT \/Btn/g)||[])).toHaveLength(1);const stream=/stream\n([\s\S]*?)\nendstream/.exec(pdf)!;const content=inflateSync(Buffer.from(stream[1],'latin1')).toString('latin1');expect(content.includes('Missing Player')).toBe(true);expect(content.includes('Owned one')).toBe(false);
+ for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+ await page.goto('/manual');for(const[label,value]of [['Player','Missing Player'],['Year','2025-26'],['Brand','Upper Deck'],['Set','Series 1'],['Card Number','3']])await page.getByLabel(label,{exact:true}).fill(value);await page.getByRole('button',{name:'Save Card',exact:true}).click();await page.waitForURL('**/collection');await page.goto('/sets');await expect(page.getByText('100% complete',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Print / PDF',exact:true})).toBeDisabled();expect(backend.rows).toHaveLength(5);page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Delete checklist',exact:true}).click();await expect(page.getByRole('heading',{name:'Start tracking a set.',exact:true})).toBeVisible();expect(backend.rows).toHaveLength(5);expect(backend.checklists).toHaveLength(0);
 });

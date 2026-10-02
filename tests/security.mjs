@@ -152,4 +152,18 @@ assert.equal(preserved.card_id,null);assert.equal(preserved.card_label,'Saved ca
 await db.exec('reset role; set role anon;');
 await assert.rejects(db.query('select * from public.card_transactions'),/permission denied/);
 console.log('PASS financial records preserve history, leave inventory unchanged, enforce valid money, and isolate owners');
+await db.exec('reset role;');
+await db.exec(await readFile(new URL('../supabase/migrations/20261002230530_set_completion_checklists.sql',import.meta.url),'utf8'));
+await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${a}',false);`);
+const checklist=(await db.query(`insert into public.set_checklists(user_id,title,sport,year,brand,set_name,entries) values($1,'Test set','Hockey','2025-26','Upper Deck','Series 1','[{"number":"1","player":"","team":""}]') returning id`,[a])).rows[0].id;
+await assert.rejects(db.query(`update public.set_checklists set user_id=$1 where id=$2`,[b,checklist]),/row-level security/);
+await assert.rejects(db.query(`insert into public.set_checklists(user_id,title,sport,year,brand,set_name,entries) values($1,'Foreign','Hockey','2025-26','Upper Deck','Series 1','[{"number":"1","player":"","team":""}]')`,[b]),/row-level security|check constraint/);
+await db.exec(`select set_config('request.jwt.claim.sub','${b}',false);`);
+assert.equal((await db.query('select count(*)::int n from public.set_checklists')).rows[0].n,0);
+assert.equal((await db.query("update public.set_checklists set title='Changed' where id=$1 returning id",[checklist])).rows.length,0);
+assert.equal((await db.query('delete from public.set_checklists where id=$1 returning id',[checklist])).rows.length,0);
+await db.exec(`select set_config('request.jwt.claim.sub','${a}',false);`);
+await db.query('delete from public.set_checklists where id=$1',[checklist]);
+await db.exec('reset role; set role anon;');await assert.rejects(db.query('select * from public.set_checklists'),/permission denied/);
+console.log('PASS saved set checklists isolate owners, refuse reassignment and deny anonymous reads');
 await db.close();
