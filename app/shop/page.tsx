@@ -3,7 +3,7 @@ import Image from "next/image";
 import VaultIcon from "@/components/VaultIcon";
 import "./storefront.css";
 
-const vaultUrl = "https://shadowfox-sports-card-vault.vercel.app/";
+const vaultUrl = "https://shadowfox-sports-card-vault.vercel.app/login";
 const ebayStoreUrl = "https://www.ebay.ca/usr/shadowfoxsportscards";
 
 export const metadata: Metadata = {
