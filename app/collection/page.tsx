@@ -6,6 +6,7 @@ import PageShell from "@/components/PageShell";
 import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/components/AuthProvider";
 import VaultIcon from "@/components/VaultIcon";
+import CollectionPdfExport from "@/components/CollectionPdfExport";
 import CollectionControls from "@/components/CollectionControls";
 import CollectionTable from "@/components/CollectionTable";
 import CollectionGrid from "@/components/CollectionGrid";
@@ -79,7 +80,7 @@ export default function CollectionPage() {
         <CollectionControls filters={filters} setFilters={setFilters} sortKey={sortKey} setSortKey={setSortKey} viewMode={viewMode} setViewMode={setViewMode} />
         <div className="vaultSectionHeading">
           <div><h2>{hasFilters ? "Matching cards" : "All cards"}</h2><p className="vaultResultsLabel">{cardsLoading ? "Loading your collection…" : `${filtered.length} ${filtered.length === 1 ? "entry" : "entries"}${hasFilters ? ` of ${cards.length}` : ""} in your vault`}</p></div>
-          <details className="vaultExport"><summary><VaultIcon name="arrow" size={16} />Export</summary><div><button type="button" onClick={exportCsv} disabled={cardsLoading || !!error}>{content.exportCsvLabel}</button><button type="button" onClick={exportJson} disabled={cardsLoading || !!error}>{content.exportJsonLabel}</button></div></details>
+          <details className="vaultExport"><summary><VaultIcon name="arrow" size={16} />Export</summary><div><CollectionPdfExport cards={cards} filtered={filtered} disabled={cardsLoading || !!error} /><button type="button" onClick={exportCsv} disabled={cardsLoading || !!error}>{content.exportCsvLabel}</button><button type="button" onClick={exportJson} disabled={cardsLoading || !!error}>{content.exportJsonLabel}</button></div></details>
         </div>
         {!error && (cardsLoading ? <section className="panel" role="status">Loading cards…</section> : !filtered.length ? <section className="vaultEmptyState"><VaultIcon name="binder" size={32} /><h2>{content.emptyTitle}</h2><p>{content.emptyText}</p>{hasFilters ? <button className="btn secondary" type="button" onClick={() => setFilters({ ...defaultFilters })}>Clear filters</button> : <Link className="btn primary" href="/scan"><VaultIcon name="scan" size={18} />Scan your first card</Link>}</section> : viewMode === "list" ? <CollectionTable cards={filtered} /> : <CollectionGrid cards={filtered} />)}
         {!cardsLoading && !error && filtered.length > 0 ? <footer className="vaultGalleryFooter"><span>{valuedEntries ? `Saved estimates: ${cad.format(totalValue(filtered))} CAD · ${valuedEntries} of ${filtered.length} entries valued` : "No estimates saved yet."}</span><Link href="/analytics">View insights <VaultIcon name="arrow" size={14} /></Link></footer> : null}

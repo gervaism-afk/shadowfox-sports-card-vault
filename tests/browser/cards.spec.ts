@@ -332,3 +332,30 @@ test('photos wait for one combined identification and stopped scans cannot overw
   await expect(page.getByRole('img', { name: 'Back preview' })).toBeVisible();
   expect(calls).toBe(1);
 });
+
+test('collection PDF downloads all paginated cards or the chosen filtered subset', async ({ page }) => {
+  const records = Array.from({ length: 1105 }, (_, i) => row({ player: `PDF Player ${i}`, year: '2021-22', brand: 'Upper Deck', set_name: 'MVP', card_number: String(i + 1), quantity: 2 }));
+  await fixture(page, records);
+  await page.goto('/collection');
+  await expect(page.locator('.kpiValue').first()).toHaveText('2210');
+  await page.getByText('Export', { exact: true }).click();
+  await page.getByRole('button', { name: 'Print / PDF', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download PDF', exact: true }).click();
+  const file = await downloaded;
+  const pdf = (await readFile((await file.path())!)).toString('latin1');
+  expect(pdf.startsWith('%PDF')).toBe(true);
+  expect((pdf.match(/\/FT \/Btn/g) || []).length).toBe(1105);
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search your collection' }).fill('PDF Player 1104');
+  await page.getByRole('button', { name: 'Print / PDF', exact: true }).click();
+  await page.getByLabel('Cards to include').selectOption('filtered');
+  await page.getByLabel('Paper size').selectOption('a4');
+  const subsetDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download PDF', exact: true }).click();
+  const subset = (await readFile((await (await subsetDownload).path())!)).toString('latin1');
+  expect((subset.match(/\/FT \/Btn/g) || []).length).toBe(1);
+});
