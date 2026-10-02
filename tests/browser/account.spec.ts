@@ -64,7 +64,7 @@ test('account settings persist only the name, verify current password, and expos
   });
   await page.goto('/account');
   await expect(page.getByLabel('Display name')).toHaveValue('Collector');
-  await expect(page.locator('.brandRealLogo')).toHaveAttribute('src', '/shadowfox-logo.jpg');
+  await expect(page.locator('.brandRealLogo')).toHaveAttribute('src', '/shadowfox-logo.png');
   await page.getByLabel('Display name').fill('My new name');
   await page.getByRole('button', { name: 'Save name' }).click();
   await expect(page.getByRole('status')).toHaveText('Name saved.');

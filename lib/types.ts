@@ -31,6 +31,9 @@ export type CardRecord = {
 
 export type Filters = {
   search: string;
+  set: string;
+  subset: string;
+  parallel: string;
   sport: "" | Sport;
   brand: string;
   player: string;

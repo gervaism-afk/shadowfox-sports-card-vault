@@ -5,7 +5,7 @@ export function duplicateKey(card: CardRecord) {
   // Normalize this known alias without merging other sets or variants.
   const set = card.set.trim().toLowerCase();
   const canonicalSet = card.sport === "Hockey" && card.brand.trim().toLowerCase() === "upper deck" && set === "mvp hockey" ? "mvp" : set;
-  const team = card.team.trim().toLowerCase();
+  const team = card.team.trim().normalize("NFKD").replace(/\p{Diacritic}/gu, "").toLowerCase();
   const canonicalTeam = card.sport === "Hockey" && team === "canadiens" ? "montreal canadiens" : team;
   return [
     card.sport,

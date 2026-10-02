@@ -2,6 +2,9 @@
 
 import { useId } from "react";
 import { CardRecord, GradingCompany, Sport } from "@/lib/types";
+import CardSuggestionInput, { type CardSuggestion } from "@/components/CardSuggestionInput";
+import { useCardCatalog, useOwnedCardSuggestions } from "@/lib/catalog/client";
+import { normalizeOption, optionValues } from "@/lib/catalog/types";
 import ImagePicker from "@/components/ImagePicker";
 
 const gradingOptions: GradingCompany[] = ["", "PSA", "BGS", "SGC", "CGC", "Other"];
@@ -11,18 +14,36 @@ export default function CardForm({ value, onChange, showImageFields = true, want
   const id = useId();
   const setField = <K extends keyof CardRecord>(key: K, next: CardRecord[K]) => onChange({ ...value, [key]: next });
 
+  const { catalog, loading: catalogLoading, error: catalogError } = useCardCatalog(value.sport,value.year);
+  const owned=useOwnedCardSuggestions().filter(card=>card.sport===value.sport);
+  const currentYear=new Date().getUTCFullYear();
+  const years=optionValues([...(catalog?.sets.map(row=>row.year)||[]),...owned.map(card=>card.year),...Array.from({length:currentYear-1899},(_,i)=>value.sport==='Hockey'?`${currentYear-i}-${String(currentYear-i+1).slice(-2)}`:String(currentYear-i))]).reverse();
+  const products=(catalog?.sets||[]).filter(row=>(!value.brand||normalizeOption(row.brand)===normalizeOption(value.brand))&&(!value.year||normalizeOption(row.year)===normalizeOption(value.year)));
+  const fallbackBrands=value.sport==='Hockey'?['Upper Deck','O-Pee-Chee','Panini','Topps','Score','Fleer','Pacific']:['Topps','Bowman','Panini','Donruss','Upper Deck','Fleer','Leaf','Score','Pinnacle','Pacific'];
+  const plain=(items:string[]):CardSuggestion[]=>optionValues(items).map(text=>({value:text}));
+  const options:Record<string,CardSuggestion[]>={
+    player:plain([...owned.map(card=>card.player),...(catalog?.players.map(player=>player.name)||[])]),
+    team:plain([...owned.map(card=>card.team),...(catalog?.teams||[])]),
+    year:years.map(year=>({value:year})),
+    brand:plain([...fallbackBrands,...owned.map(card=>card.brand),...(catalog?.sets.map(row=>row.brand)||[])]),
+    set:[...products.map(row=>({value:row.set,detail:[row.year,row.brand].filter(Boolean).join(' · '),key:row.url})),...plain([...owned.filter(card=>(!value.brand||normalizeOption(card.brand)===normalizeOption(value.brand))&&(!value.year||normalizeOption(card.year)===normalizeOption(value.year))).map(card=>card.set)]).filter(option=>!products.some(row=>normalizeOption(row.set)===normalizeOption(option.value)))],
+    subset:plain([...owned.filter(card=>!value.set||normalizeOption(card.set)===normalizeOption(value.set)).map(card=>card.subset)]),
+    parallel:plain([...owned.filter(card=>!value.set||normalizeOption(card.set)===normalizeOption(value.set)).map(card=>card.parallel)]),
+  };
+  function suggestion(key:'player'|'team'|'year'|'brand'|'set'|'subset'|'parallel',label:string){return <CardSuggestionInput id={`${id}-${key}`} label={label} value={value[key]} options={options[key]} onChange={next=>setField(key,next)} onSelect={key==='set'?option=>{const product=products.find(row=>row.url===option.key);onChange({...value,set:option.value,...(product&&!value.brand?{brand:product.brand}:{}),...(product&&!value.year?{year:product.year}:{})});}:undefined}/>;}
   return (
     <div className="formGrid">
+      <div className="fieldBlockWide cardReferenceNotice"><p className="helperText">Type or choose a suggestion. Set choices follow your sport, brand and year. A listed set can fill an empty brand and year; every field stays editable.</p><details><summary>{catalogLoading?'Updating reference suggestions…':'Reference sources & updates'}</summary><p className="helperText">Public references refresh automatically, with scheduled daily checks. Player lists reflect current NHL/MLB listings; use the team printed on older cards. Set coverage depends on published checklists. Unlisted sets and variations can always be entered manually.</p>{catalog?.sources.map(source=><p className="helperText" key={source.name}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.name}</a> · {source.status==='saved'?'Saved reference copy · ':''}checked {new Date(source.checkedAt).toLocaleString()}</p>)}{catalogError?<p className="helperText">{catalogError}</p>:null}</details></div>
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-sport`}> Sport</label><select id={`${id}-sport`} className="input" value={value.sport} onChange={(e) => setField("sport", e.target.value as Sport)}>{sportOptions.map((sport) => <option key={sport}>{sport}</option>)}</select></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-player`}> Player</label><input id={`${id}-player`} className="input" value={value.player} onChange={(e) => setField("player", e.target.value)} /></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-year`}> Year</label><input id={`${id}-year`} className="input" value={value.year} onChange={(e) => setField("year", e.target.value)} /></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-brand`}> Brand</label><input id={`${id}-brand`} className="input" value={value.brand} onChange={(e) => setField("brand", e.target.value)} /></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-set`}> Set</label><input id={`${id}-set`} className="input" value={value.set} onChange={(e) => setField("set", e.target.value)} /></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-subset`}> Subset</label><input id={`${id}-subset`} className="input" value={value.subset} onChange={(e) => setField("subset", e.target.value)} /></div>
+      {suggestion("player","Player")}
+      {suggestion("year","Year")}
+      {suggestion("brand","Brand")}
+      {suggestion("set","Set")}
+      {suggestion("subset","Subset")}
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-cardNumber`}> Card Number</label><input id={`${id}-cardNumber`} className="input" value={value.cardNumber} onChange={(e) => setField("cardNumber", e.target.value)} /></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-team`}> Team</label><input id={`${id}-team`} className="input" value={value.team} onChange={(e) => setField("team", e.target.value)} /></div>
+      {suggestion("team","Team")}
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-serialNumber`}> Serial Number</label><input id={`${id}-serialNumber`} className="input" value={value.serialNumber} onChange={(e) => setField("serialNumber", e.target.value)} /></div>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-parallel`}> Parallel</label><input id={`${id}-parallel`} className="input" value={value.parallel} onChange={(e) => setField("parallel", e.target.value)} /></div>
+      {suggestion("parallel","Parallel")}
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-gradingCompany`}> Grading Company</label><select id={`${id}-gradingCompany`} className="input" value={value.gradingCompany} onChange={(e) => setField("gradingCompany", e.target.value as GradingCompany)}>{gradingOptions.map((opt) => <option key={opt} value={opt}>{opt || "Select one"}</option>)}</select></div>
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-grade`}> Grade</label><input id={`${id}-grade`} className="input" value={value.grade} onChange={(e) => setField("grade", e.target.value)} /></div>
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-quantity`}>{wanted ? "Desired quantity" : "Quantity"}</label><input id={`${id}-quantity`} className="input" type="number" min={1} value={value.quantity} onChange={(e) => setField("quantity", Number(e.target.value || 1))} /></div>

@@ -1,3 +1,4 @@
+import { normalizeOption } from "./catalog/types";
 import { CardRecord, Filters, SortKey } from "@/lib/types";
 
 export const totalCards = (cards: CardRecord[]) => cards.reduce((sum, card) => sum + (Number(card.quantity) || 0), 0);
@@ -16,10 +17,13 @@ export function filterCards(cards: CardRecord[], filters: Filters) {
     return (
       (!q || haystack.includes(q)) &&
       (!filters.sport || card.sport === filters.sport) &&
-      (!filters.brand || card.brand.toLowerCase().includes(filters.brand.toLowerCase())) &&
-      (!filters.player || card.player.toLowerCase().includes(filters.player.toLowerCase())) &&
-      (!filters.team || card.team.toLowerCase().includes(filters.team.toLowerCase())) &&
-      (!filters.year || card.year.includes(filters.year)) &&
+      (!filters.brand || normalizeOption(card.brand) === normalizeOption(filters.brand)) &&
+      (!filters.player || normalizeOption(card.player) === normalizeOption(filters.player)) &&
+      (!filters.team || normalizeOption(card.team) === normalizeOption(filters.team)) &&
+      (!filters.year || normalizeOption(card.year) === normalizeOption(filters.year)) &&
+      (!filters.set || normalizeOption(card.set) === normalizeOption(filters.set)) &&
+      (!filters.subset || normalizeOption(card.subset) === normalizeOption(filters.subset)) &&
+      (!filters.parallel || normalizeOption(card.parallel) === normalizeOption(filters.parallel)) &&
       boolPass(filters.rookie, card.rookie) &&
       boolPass(filters.autograph, card.autograph) &&
       boolPass(filters.relicPatch, card.relicPatch) &&
@@ -33,7 +37,7 @@ export function sortCards(cards: CardRecord[], sortKey: SortKey) {
     switch (sortKey) {
       case "oldest": return a.createdAt.localeCompare(b.createdAt);
       case "playerAsc": return a.player.localeCompare(b.player);
-      case "yearDesc": return Number(b.year || 0) - Number(a.year || 0);
+      case "yearDesc": return b.year.localeCompare(a.year,"en",{numeric:true});
       case "valueDesc": return recordTotal(b) - recordTotal(a);
       default: return b.createdAt.localeCompare(a.createdAt);
     }

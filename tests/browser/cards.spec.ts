@@ -9,6 +9,7 @@ function row(patch: Record<string, unknown> = {}) {
 }
 async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
   await page.route('**/api/identify', route => route.fulfill({ status: 503, json: { error: 'AI identification is not configured.' } }));
+  await page.route('**/api/catalog?**', route => { const sport=new URL(route.request().url()).searchParams.get('sport');return route.fulfill({json:{sport,teams:sport==='Hockey'?['Montréal Canadiens']:['Toronto Blue Jays'],players:[{name:sport==='Hockey'?'Nick Suzuki':'Vladimir Guerrero Jr.',team:''}],sets:[{year:sport==='Hockey'?'2026-27':'2026',brand:sport==='Hockey'?'Upper Deck':'Topps',set:sport==='Hockey'?'Tim Hortons':'Chrome',url:'https://example.test/checklist'}],sources:[]}}); });
   const rows = [...initial];
   const binders: any[] = []; const memberships: any[] = []; const wants: any[] = []; const transactions: any[] = [];
   const calls: string[] = [];
@@ -148,7 +149,7 @@ test('collection totals and JSON export include rows beyond the API cap', async 
   await page.goto('/collection');
   await expect(page.locator('.kpiValue').first()).toHaveText('1105');
   const downloaded = page.waitForEvent('download');
-  await page.getByText('Export', { exact: true }).click();
+  await page.getByText('Print & export', { exact: true }).click();
   await page.getByRole('button', { name: 'Export JSON' }).click();
   const file = await downloaded;
   const exported = JSON.parse(await readFile((await file.path())!, 'utf8'));
@@ -362,7 +363,7 @@ test('collection PDF downloads all paginated cards or the chosen filtered subset
   await fixture(page, records);
   await page.goto('/collection');
   await expect(page.locator('.kpiValue').first()).toHaveText('2210');
-  await page.getByText('Export', { exact: true }).click();
+  await page.getByText('Print & export', { exact: true }).click();
   await page.getByRole('button', { name: 'Print / PDF', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -529,4 +530,28 @@ test('interrupted restore retains saved cards and safely resumes without changin
   await page.getByRole('button',{name:'Restore 1 missing entry',exact:true}).click();
   await expect(page.getByRole('status')).toContainText('Restore complete');
   expect(backend.rows).toHaveLength(2);expect(backend.rows.find(r=>r.id===savedId)?.quantity).toBe(2);
+});
+
+
+test('combined filters constrain CSV, JSON and printable PDF, with explicit all-collection override',async({page})=>{
+  await fixture(page,[row({player:'Nick Suzuki',team:'Montréal Canadiens',brand:'Upper Deck',year:'2021-22',set_name:'MVP',parallel:'Silver',quantity:2}),row({player:'Nick Suzuki',team:'Montréal Canadiens',brand:'Upper Deck',year:'2021-22',set_name:'MVP',parallel:'Gold'}),row({player:'Other Player',team:'Toronto Maple Leafs',brand:'Topps',year:'2026',set_name:'Chrome'})]);
+  await page.goto('/collection');await page.getByText('Filters',{exact:true}).click();
+  for(const [label,value] of [['Player','Nick Suzuki'],['Team','Montréal Canadiens'],['Brand','Upper Deck'],['Year','2021-22'],['Set','MVP'],['Variation / parallel','Silver']])await page.getByLabel(label,{exact:true}).selectOption(value);
+  await page.getByText('Print & export',{exact:true}).click();
+  await expect(page.getByLabel('Export scope')).toHaveValue('filtered');
+  let pending=page.waitForEvent('download');await page.getByRole('button',{name:'Export JSON',exact:true}).click();let file=await pending;let data=JSON.parse(await readFile((await file.path())!,'utf8'));expect(data).toHaveLength(1);expect(data[0].parallel).toBe('Silver');
+  pending=page.waitForEvent('download');await page.getByRole('button',{name:'Export CSV',exact:true}).click();file=await pending;let csv=await readFile((await file.path())!,'utf8');expect(csv).toContain('Silver');expect(csv).not.toContain('Gold');expect(csv).not.toContain('Other Player');
+  await page.getByRole('button',{name:'Print / PDF',exact:true}).click();await expect(page.getByLabel('Cards to include')).toHaveValue('filtered');pending=page.waitForEvent('download');await page.getByRole('button',{name:'Download PDF',exact:true}).click();file=await pending;let pdf=(await readFile((await file.path())!)).toString('latin1');expect((pdf.match(/\/FT \/Btn/g)||[])).toHaveLength(1);
+  await page.getByLabel('Export scope').selectOption('all');pending=page.waitForEvent('download');await page.getByRole('button',{name:'Export JSON',exact:true}).click();file=await pending;expect(JSON.parse(await readFile((await file.path())!,'utf8'))).toHaveLength(3);
+  for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+});
+
+test('manual card suggestions cover both sports, keyboard choices and custom corrections',async({page})=>{
+  await fixture(page);await page.goto('/manual');
+  await page.getByLabel('Player',{exact:true}).fill('Nick');await page.getByRole('option',{name:'Nick Suzuki',exact:true}).click();
+  await page.getByLabel('Brand',{exact:true}).fill('Upper Deck');await page.getByLabel('Year',{exact:true}).fill('2026-27');await page.getByLabel('Set',{exact:true}).fill('Tim');await page.getByRole('option',{name:'Tim Hortons',exact:false}).click();await expect(page.getByLabel('Set',{exact:true})).toHaveValue('Tim Hortons');
+  await page.getByLabel('Team',{exact:true}).fill('Mont');await page.getByLabel('Team',{exact:true}).press('ArrowDown');await page.getByLabel('Team',{exact:true}).press('Enter');await expect(page.getByLabel('Team',{exact:true})).toHaveValue('Montréal Canadiens');
+  await page.getByLabel('Sport',{exact:true}).selectOption('Baseball');await page.getByLabel('Year',{exact:true}).fill('2026');await page.getByLabel('Brand',{exact:true}).fill('Topps');await page.getByLabel('Player',{exact:true}).fill('Vladimir');await page.getByRole('option',{name:'Vladimir Guerrero Jr.',exact:true}).click();await page.getByLabel('Set',{exact:true}).fill('Chr');await page.getByRole('option',{name:'Chrome',exact:false}).click();
+  await page.getByLabel('Set',{exact:true}).fill('My unlisted set');await page.getByLabel('Parallel',{exact:true}).fill('Custom variation');await page.getByLabel('Notes',{exact:true}).click();await expect(page.getByLabel('Set',{exact:true})).toHaveValue('My unlisted set');
+  await page.setViewportSize({width:320,height:850});await page.getByRole('button',{name:'Show brand suggestions'}).click();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

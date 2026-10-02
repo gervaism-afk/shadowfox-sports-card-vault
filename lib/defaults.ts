@@ -1,7 +1,7 @@
 import type { CardRecord, Filters } from "@/lib/types";
 
 export const defaultFilters: Filters = {
-  search: "", sport: "", brand: "", player: "", team: "", rookie: "",
+  search: "", set: "", subset: "", parallel: "", sport: "", brand: "", player: "", team: "", rookie: "",
   autograph: "", relicPatch: "", graded: "", year: "",
 };
 
