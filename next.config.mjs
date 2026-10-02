@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  deploymentId: process.env.VERCEL_GIT_COMMIT_SHA,
   images: {
     unoptimized: true,
   },

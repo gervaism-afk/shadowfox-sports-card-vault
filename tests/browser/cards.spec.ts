@@ -69,6 +69,7 @@ test('real local OCR, sold-price estimate, save, and collection navigation', asy
   page.on('request', (request) => { if (/jsdelivr|tessdata|projectnaptha/.test(request.url())) externalOcr.push(request.url()); });
   await page.goto('/scan');
   await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save Card', exact: true })).toBeDisabled();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor Mcdavid', { timeout: 60000 });
   await expect(page.getByLabel('Year', { exact: true })).toHaveValue('2023');
@@ -99,11 +100,13 @@ test('a second scan clears previous values; duplicate quantity uses atomic RPC',
   const backend = await fixture(page, [row({ player: 'John Smith', year: '2024', brand: 'Topps', card_number: '100', subset: 'Young Guns', sport: 'Hockey', rookie: true })]);
   await page.goto('/scan');
   await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor Mcdavid', { timeout: 60000 });
   await expect(page.getByRole('button', { name: 'Save Card', exact: true })).toBeEnabled();
   await page.getByLabel('Notes', { exact: true }).fill('Old scan notes');
   await page.getByLabel('Estimated Value CAD').fill('999');
   await page.getByLabel('Upload front image').setInputFiles(await cardImage(page, 'JOHN SMITH', '2024', 'Topps', '100'));
+  await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('John Smith', { timeout: 60000 });
   await expect(page.getByLabel('Notes', { exact: true })).toHaveValue('');
   await expect(page.getByLabel('Estimated Value CAD')).toHaveValue('0');
@@ -148,11 +151,12 @@ test('AI fills editable details, combines front and back, and saves corrections'
   });
   await page.goto('/scan');
   await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor McDavid');
   await expect(page.getByLabel('Set', { exact: true })).toHaveValue('Series One');
   await expect(page.getByText('Confirm the parallel using the back photo.')).toBeVisible();
   await page.getByLabel('Upload back image').setInputFiles(await cardImage(page));
-  await page.getByRole('button', { name: 'Identify Again' }).click();
+  await page.getByRole('button', { name: 'Identify Card' }).click();
   await expect(page.getByLabel('Parallel', { exact: true })).toHaveValue('Clear Cut');
   expect(requests[1].frontImage).toMatch(/^data:image/);
   expect(requests[1].backImage).toMatch(/^data:image/);
@@ -170,6 +174,7 @@ test('130point pasted prices require review, convert USD to CAD, and persist an 
   await page.route('**/api/pricing/exchange-rate', route => route.fulfill({ json: { rate: 1.4, date: new Date().toISOString().slice(0, 10), source: 'Bank of Canada' } }));
   await page.goto('/scan');
   await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor McDavid');
   await page.getByText('Estimate from sold prices', { exact: true }).click();
   await expect(page.getByRole('link', { name: 'Open 130point' })).toHaveAttribute('href', 'https://130point.com/sales/');
@@ -295,4 +300,35 @@ test('account navigation shows Admin only for the verified role and logs out', a
   await page.getByRole('button', { name: 'Log Out', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0);
+});
+
+test('photos wait for one combined identification and stopped scans cannot overwrite manual edits', async ({ page }) => {
+  await fixture(page);
+  let calls = 0;
+  let release: (() => void) | undefined;
+  await page.route('**/api/identify', async route => {
+    calls++;
+    const body = route.request().postDataJSON();
+    expect(body.frontImage).toMatch(/^data:image/);
+    expect(body.backImage).toMatch(/^data:image/);
+    await new Promise<void>(resolve => { release = resolve; });
+    await route.fulfill({ json: { fields: { player: 'Stale result' }, warnings: [], evidence: '' } }).catch(() => {});
+  });
+  await page.goto('/scan');
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await expect(page.getByText('Front photo ready.', { exact: false })).toBeVisible();
+  await page.getByLabel('Upload back image').setInputFiles(await cardImage(page));
+  await expect(page.getByText('Back photo ready.', { exact: false })).toBeVisible();
+  expect(calls).toBe(0);
+  const requested = page.waitForRequest('**/api/identify');
+  await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
+  await requested;
+  await page.getByRole('button', { name: 'Stop identification' }).click();
+  await expect(page.getByLabel('Player', { exact: true })).toBeEnabled();
+  await page.getByLabel('Player', { exact: true }).fill('Manual correction');
+  release?.();
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Manual correction');
+  await expect(page.getByRole('img', { name: 'Front preview' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Back preview' })).toBeVisible();
+  expect(calls).toBe(1);
 });

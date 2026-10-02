@@ -1,7 +1,7 @@
 "use client";
+import { createWorker } from "tesseract.js";
 
 export async function recognizeCardImage(image: string, progress: (message: string) => void, signal?: AbortSignal) {
-  const { createWorker } = await import("tesseract.js");
   const worker = await createWorker("eng", 1, {
     workerPath: "/ocr/worker.min.js",
     corePath: "/ocr/core",

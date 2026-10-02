@@ -1,7 +1,10 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+
+import PasswordInput from "./PasswordInput";
+import { remembersSession, setRememberSession } from "@/lib/session-storage";
 
 export default function LoginPanel() {
   const id = useId();
@@ -13,11 +16,15 @@ export default function LoginPanel() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const [remember, setRemember] = useState(true);
+  useEffect(() => { setRemember(remembersSession()); }, []);
+
   async function handleLogin() {
     if (!supabase || !isSupabaseConfigured()) return setStatus("Supabase is not configured.");
     try {
       setBusy(true);
       setStatus("Signing in…");
+      setRememberSession(remember);
       const loginEmail = identifier.trim();
       const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
       if (error) throw error;
@@ -39,14 +46,15 @@ export default function LoginPanel() {
       if (!email.trim()) throw new Error("Email is required.");
       if (password.length < 6) throw new Error("Password must be at least 6 characters.");
 
-      const { error } = await supabase.auth.signUp({
+      setRememberSession(remember);
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: { data: { username: name } },
       });
       if (error) throw error;
 
-      setStatus("Account created. Check your email to confirm, then log in.");
+      setStatus(data.session ? "Account created. Opening your vault…" : "Account created. Check your email to confirm, then log in.");
       setMode("login");
       setIdentifier(email.trim());
       setPassword("");
@@ -89,7 +97,9 @@ export default function LoginPanel() {
           <label className="label" htmlFor={`${id}-email`}>Email</label>
           <input id={`${id}-email`} className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} type="email" autoComplete="email" required placeholder="you@example.com" />
           <label className="label" htmlFor={`${id}-password`}>Password</label>
-          <input id={`${id}-password`} className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" />
+          <PasswordInput id={`${id}-password`} className="input" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" />
+          <label className="checkRow"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /><span>Remember me on this device</span></label>
+          <p className="helperText">Leave unchecked to keep your login in this tab only.</p>
           <button type="submit" className="btn primary" disabled={busy}>Log In</button>
         </form>
       ) : mode === "signup" ? (
@@ -99,7 +109,8 @@ export default function LoginPanel() {
           <label className="label" htmlFor={`${id}-email`}>Email</label>
           <input id={`${id}-email`} className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
           <label className="label" htmlFor={`${id}-password`}>Password</label>
-          <input id={`${id}-password`} className="input" type="password" autoComplete="new-password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
+          <PasswordInput id={`${id}-password`} className="input" autoComplete="new-password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
+          <label className="checkRow"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /><span>Remember me on this device</span></label>
           <button type="submit" className="btn primary" disabled={busy}>Create Account</button>
         </form>
       ) : (

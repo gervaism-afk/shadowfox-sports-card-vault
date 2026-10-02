@@ -83,10 +83,7 @@ export default function AppHeader() {
       <header className="compactHeader">
         <div className="compactHeaderInner">
           <Link href="/" className="brandWordmark" aria-label="ShadowFox home">
-            <svg className="brandFoxMark" width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-              <path d="m5 5 10.5 6L27 5l-3 15-8.5 7L7 20 5 5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-              <path d="m5 5 11 15L27 5M7 20l9-5 8 5m-8 0v7" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-            </svg>
+            <img className="brandRealLogo" src="/shadowfox-logo.jpg" width={64} height={64} alt="" />
             <span>
               <span className="brandTitle">ShadowFox<span className="brandDot">.</span></span>
               <span className="brandSubtitle">Sports Card Vault</span>
@@ -104,13 +101,14 @@ export default function AppHeader() {
                 </button>
                 {accountOpen ? <div className="accountDropdown" id="account-dropdown">
                   <div className="accountDropdownIdentity"><span className="eyebrow">Your account</span><span>{user.email || "Collector"}</span></div>
+                  <Link href="/account" onClick={() => setAccountOpen(false)}><VaultIcon name="shield" size={16} /> Account settings</Link>
                   {adminUserId === user.id ? <Link href="/admin" onClick={() => setAccountOpen(false)}><VaultIcon name="shield" size={16} /> Admin</Link> : null}
                   <button type="button" onClick={handleLogout} disabled={signingOut}><VaultIcon name="logout" size={16} /> {signingOut ? "Signing out…" : "Log Out"}</button>
                 </div> : null}
               </div>
             </> : !loading ? <>
               <Link href="/scan" className="navLink guestScanLink">Scan a card</Link>
-              <Link href="/#sign-in" className="btn primary">Sign in</Link>
+              <Link href="/login" className="btn primary">Sign in</Link>
             </> : <span className="headerAuthLoading" aria-label="Checking sign-in" />}
           </div>
         </div>

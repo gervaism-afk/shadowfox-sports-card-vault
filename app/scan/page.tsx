@@ -18,12 +18,20 @@ import { duplicateKey, ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
 
 export default function ScanPage() {
   const [card, setCard] = useState<CardRecord>(emptyCard);
-  const [status, setStatus] = useState("Upload a clear photo of the card front to read its text.");
+  const [status, setStatus] = useState("Upload the front and back, then select Identify Card.");
   const [aiWarnings, setAiWarnings] = useState<string[]>([]);
   const [ocrText, setOcrText] = useState("");
   const [confidence, setConfidence] = useState<number | null>(null);
   const [duplicate, setDuplicate] = useState<CardRecord | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!scanning) return;
+    setElapsed(0);
+    const timer = setInterval(() => setElapsed(value => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, [scanning]);
   const running = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const router = useRouter();
@@ -52,9 +60,27 @@ export default function ScanPage() {
     if (running.current || !card.frontImage) return;
     running.current = true; setBusy(true);
     const task = new AbortController(); controller.current = task;
-    try { await identify(card, task.signal); }
-    catch (error: any) { if (!task.signal.aborted) setStatus(error.message); }
-    finally { running.current = false; if (!task.signal.aborted) setBusy(false); }
+    setScanning(true);
+    try {
+      try { await identify(card, task.signal); }
+      catch (error: any) {
+        if (task.signal.aborted) return;
+        setAiWarnings([error.message || "AI is unavailable.", "Local text reading was used. Review the details carefully."]);
+        const text = await recognizeCardImage(card.frontImage, message => { if (!task.signal.aborted) setStatus(message); }, task.signal);
+        if (task.signal.aborted) return;
+        const guess = parseOcrText(text);
+        setCard(applyOcrGuess(card, guess)); setOcrText(text); setConfidence(computeConfidence(guess, text));
+        setStatus("Text read. Review and complete the fields before saving.");
+      }
+    } catch (error: any) {
+      if (!task.signal.aborted) setStatus(/chunk|Loading.*failed/i.test(error.message) ? "The app was updated while this page was open. Refresh this page and upload your photos again, or enter the details below." : error.message);
+    } finally { if (controller.current === task) { running.current = false; setBusy(false); setScanning(false); } }
+  }
+
+  function cancelScan() {
+    controller.current?.abort();
+    controller.current = null; running.current = false; setBusy(false); setScanning(false);
+    setStatus("Identification stopped. Your photos are still here; enter details manually or try Identify Card again.");
   }
 
   async function upload(file: File, back = false) {
@@ -69,25 +95,13 @@ export default function ScanPage() {
       if (task.signal.aborted) return;
       if (back) {
         setCard((previous) => ({ ...previous, backImage: image }));
-        setStatus("Back image loaded. Select Identify Again to use both photos; this will replace detected card details.");
+        setStatus("Back photo ready. Select Identify Card to read both photos together.");
         return;
       }
       // A new front photo starts a new card; no fields carry over from the last scan.
       const fresh = { ...emptyCard(), frontImage: image };
       setCard(fresh); setAiWarnings([]); setOcrText(""); setConfidence(null); setDuplicate(null);
-      let aiError = "";
-      try { await identify(fresh, task.signal); return; }
-      catch (error: any) { if (task.signal.aborted) return; aiError = error.message || "AI identification is unavailable."; }
-      const text = await recognizeCardImage(image, (message) => { if (!task.signal.aborted) setStatus(message); }, task.signal);
-      if (task.signal.aborted) return;
-      setOcrText(text);
-      const guess = parseOcrText(text);
-      const next = applyOcrGuess(fresh, guess);
-      setCard(next);
-      const score = computeConfidence(guess, text);
-      setConfidence(score);
-      setAiWarnings([aiError, "Local text reading was used. Card identity has not been verified by AI."]);
-      setStatus(!text ? "No text found. Try a sharper photo or enter the fields below." : score < 0.45 ? "Some details could not be read. Review and complete the fields before saving." : "Text read. Review all fields before saving.");
+      setStatus("Front photo ready. Add the back photo, then select Identify Card to read both in one scan.");
     } catch (error: any) {
       if (!task.signal.aborted) setStatus(error.message || "Could not read this image. You can enter the fields below.");
     } finally {
@@ -127,16 +141,17 @@ export default function ScanPage() {
     <div className="workflowLayout">
       <section className="panel workflowPanel">
         <div className="workflowPanelHeading"><h2>Start with a clear photo</h2><span className="helperText">JPG, PNG or WebP</span></div>
-        <p className="helperText">The front identifies the card. Add the back for extra detail, then select Identify Again. A new front photo starts a new card.</p>
+        <p className="helperText">Add front and back photos first, then identify them together in one scan. A new front photo starts a new card.</p>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
           <div className="buttonRow" style={{ marginTop: 18 }}>
             <label className="btn primary">Upload Front<input aria-label="Upload front image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
             <label className="btn ghost">Use Camera<input aria-label="Take card photo" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
             <label className="btn ghost">Add Back Image<input aria-label="Upload back image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
-            <button type="button" className="btn ghost" disabled={!card.frontImage} onClick={() => void rescan()}>Identify Again</button>
+            <button type="button" className="btn ghost" disabled={!card.frontImage} onClick={() => void rescan()}>Identify Card</button>
           </div>
         </fieldset>
-        <p className="workflowNotice" role="status" aria-live="polite">{status}</p>
+        <p className="workflowNotice" role="status" aria-live="polite">{status}{scanning ? ` (${elapsed}s)` : ""}</p>
+        {scanning ? <button type="button" className="btn ghost" onClick={cancelScan}>Stop identification</button> : null}
         <div className="workflowPhotoGrid">
           <figure className="workflowPhoto"><div className="workflowPhotoVisual">{card.frontImage ? <img src={card.frontImage} alt="Front preview" /> : <span>Your card front<br /><small>Upload a photo to begin</small></span>}</div><figcaption>Front <span>Required for identification</span></figcaption></figure>
           <figure className="workflowPhoto"><div className="workflowPhotoVisual">{card.backImage ? <img src={card.backImage} alt="Back preview" /> : <span>Your card back<br /><small>More detail, a better match</small></span>}</div><figcaption>Back <span>Optional</span></figcaption></figure>
