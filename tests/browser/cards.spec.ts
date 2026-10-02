@@ -10,7 +10,7 @@ function row(patch: Record<string, unknown> = {}) {
 async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
   await page.route('**/api/identify', route => route.fulfill({ status: 503, json: { error: 'AI identification is not configured.' } }));
   const rows = [...initial];
-  const binders: any[] = []; const memberships: any[] = []; const wants: any[] = [];
+  const binders: any[] = []; const memberships: any[] = []; const wants: any[] = []; const transactions: any[] = [];
   const calls: string[] = [];
   const token = [Buffer.from('{"alg":"HS256"}').toString('base64url'), Buffer.from(JSON.stringify({ sub: userId, exp: Math.floor(Date.now() / 1000) + 3600, role: 'authenticated' })).toString('base64url'), 'test-only-signature'].join('.');
   await page.addInitScript(({ token, user }) => {
@@ -33,8 +33,8 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
       card.quantity += amount;
       return route.fulfill({ headers, json: card });
     }
-    if (['/rest/v1/binders','/rest/v1/binder_cards','/rest/v1/want_list'].includes(url.pathname)) {
-      const store = url.pathname.endsWith('/binders') ? binders : url.pathname.endsWith('/binder_cards') ? memberships : wants;
+    if (['/rest/v1/binders','/rest/v1/binder_cards','/rest/v1/want_list','/rest/v1/card_transactions'].includes(url.pathname)) {
+      const store = url.pathname.endsWith('/binders') ? binders : url.pathname.endsWith('/binder_cards') ? memberships : url.pathname.endsWith('/card_transactions') ? transactions : wants;
       if (request.method() === 'GET') { const offset=Number(url.searchParams.get('offset')||0); const limit=Math.min(Number(url.searchParams.get('limit')||100),100);return route.fulfill({ headers, json: store.slice(offset,offset+limit) }); }
       if (request.method() === 'POST') {
         const body = request.postDataJSON(); const entry = { id: randomUUID(), created_at: new Date().toISOString(), ...body };
@@ -71,7 +71,7 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
     }
     return route.fulfill({ status: 500, headers, json: { message: `Unexpected fixture request ${url.pathname}` } });
   });
-  return { rows, calls, binders, memberships, wants };
+  return { rows, calls, binders, memberships, wants, transactions };
 }
 async function cardImage(page: Page, player = 'CONNOR MCDAVID', year = '2023', brand = 'Upper Deck', number = '201') {
   const url = await page.evaluate(({ player, year, brand, number }) => {
@@ -441,4 +441,38 @@ test('wanted cards edit and print separately, then acquire once or merge owned q
   await expect(page.getByRole('status')).toContainText('Quantity added');
   expect(backend.rows).toHaveLength(1);expect(backend.rows[0].quantity).toBe(3);expect(backend.wants).toHaveLength(0);
   for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+});
+
+
+test('purchase and sale ledger distinguishes unknown costs, edits profit, exports and preserves inventory', async ({page}) => {
+  const backend=await fixture(page,[row({player:'Financial test card',quantity:2})]);
+  await page.goto('/transactions');
+  await page.getByRole('button',{name:'Record transaction',exact:true}).click();
+  await page.getByLabel('Type',{exact:true}).selectOption('sale');
+  await page.getByLabel('Link to a collection card (optional)',{exact:true}).selectOption(backend.rows[0].id);
+  await page.getByLabel('Total sale price (CAD)',{exact:true}).fill('25');
+  await page.getByLabel('Selling fees & shipping paid (CAD)',{exact:true}).fill('5.25');
+  await page.getByRole('button',{name:'Save transaction',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Transaction saved');
+  await expect(page.locator('.transactionStats')).toContainText('1 awaiting costs');
+  expect(backend.rows[0].quantity).toBe(2);
+  expect(backend.transactions[0].cost_cents).toBeNull();
+  await page.getByRole('button',{name:'Edit transaction',exact:true}).click();
+  await page.getByLabel('Cost of all cards sold (CAD)',{exact:true}).fill('10');
+  await page.getByRole('button',{name:'Save transaction',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Transaction saved');
+  await expect(page.locator('.transactionStats')).toContainText('$9.75');
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export CSV',exact:true}).click();
+  expect((await download).suggestedFilename()).toBe('shadowfox-purchases-sales.csv');
+  await page.reload();
+  await expect(page.locator('.transactionStats')).toContainText('$9.75');
+  for(const width of [320,390,768,1280]) {
+    await page.setViewportSize({width,height:900});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  }
+  page.once('dialog',dialog=>dialog.accept());
+  await page.getByRole('button',{name:'Delete transaction',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Transaction deleted');
+  expect(backend.transactions).toHaveLength(0);expect(backend.rows[0].quantity).toBe(2);
 });

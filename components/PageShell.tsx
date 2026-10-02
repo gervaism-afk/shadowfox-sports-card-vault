@@ -13,6 +13,7 @@ const sidebarLinks = [
   { href: "/want-list", label: "Want list", icon: "heart" },
   { href: "/scan", label: "Scan a card", icon: "scan" },
   { href: "/analytics", label: "Insights", icon: "chart" },
+  { href: "/transactions", label: "Purchases & sales", icon: "chart" },
 ];
 
 export default function PageShell({ title, children }: { title?: string; children: React.ReactNode }) {

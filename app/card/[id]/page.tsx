@@ -108,7 +108,7 @@ export default function CardDetailPage() {
             <p className="helperText">{hasEstimate ? "Value reflects your saved estimate." : "Add an estimate when you edit your card."}</p>
             <dl className="detailInfoGrid">{details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
             {card.notes ? <div className="detailNotes"><h3>Your notes</h3><p>{card.notes}</p></div> : null}
-            <div className="buttonRow"><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
+            <div className="buttonRow"><Link className="btn ghost" href={`/transactions?card=${card.id}`}>Record purchase or sale</Link><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
           </section>
         </div>
 

@@ -52,7 +52,7 @@ export default function AnalyticsPage() {
   const topCards = useMemo(() => [...cards].sort((a, b) => recordTotal(b) - recordTotal(a)).slice(0, 8), [cards]);
 
   return <AuthGate><PageShell>
-    <section className="workflowPageHeader"><div><div className="vaultEyebrow">A closer look at your collection</div><h1 className="workflowTitle">{content.title}</h1><p className="workflowIntro">{content.subtitle}</p></div><Link className="btn ghost" href="/collection">View Collection</Link></section>
+    <section className="workflowPageHeader"><div><div className="vaultEyebrow">A closer look at your collection</div><h1 className="workflowTitle">{content.title}</h1><p className="workflowIntro">{content.subtitle}</p></div><Link className="btn ghost" href="/collection">View Collection</Link><Link className="btn ghost" href="/transactions">Purchases &amp; sales</Link></section>
     {error ? <section className="workflowNotice" role="alert">{error}</section> : null}
     {loading ? <section className="panel" role="status">Putting your collection in perspective…</section> : !cards.length ? <section className="panel emptyState"><div className="emptyStateTitle">{content.emptyTitle}</div><p className="emptyStateText">{content.emptyText}</p><Link className="btn primary" href="/scan">Add your first card</Link></section> : <>
       <section className="analyticsSummary" aria-label="Collection totals">
