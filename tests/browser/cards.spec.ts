@@ -39,7 +39,9 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
       const store = url.pathname.endsWith('/set_checklists') ? checklists : url.pathname.endsWith('/binders') ? binders : url.pathname.endsWith('/binder_cards') ? memberships : url.pathname.endsWith('/card_transactions') ? transactions : wants;
       if (request.method() === 'GET') { const offset=Number(url.searchParams.get('offset')||0); const limit=Math.min(Number(url.searchParams.get('limit')||100),100);return route.fulfill({ headers, json: store.slice(offset,offset+limit) }); }
       if (request.method() === 'POST') {
-        const body = request.postDataJSON(); const entry = { id: randomUUID(), created_at: new Date().toISOString(), ...body };
+        const body = request.postDataJSON();
+        if(Array.isArray(body)){const added=[];for(const value of body){const duplicate=store.some(item=>value.binder_id?item.binder_id===value.binder_id&&item.card_id===value.card_id:item.id===value.id);if(!duplicate){const entry={created_at:new Date().toISOString(),...value};store.push(entry);added.push(entry);}}return route.fulfill({headers,json:added});}
+        const entry = { id: randomUUID(), created_at: new Date().toISOString(), ...body };
         if (!store.some(item => entry.binder_id && item.binder_id === entry.binder_id && item.card_id === entry.card_id)) store.push(entry);
         return route.fulfill({ headers, json: entry });
       }
@@ -592,4 +594,16 @@ test('refresh checklist recognizes a card added elsewhere without making another
  await page.goto('/sets');await expect(page.getByRole('button',{name:'Add owned card 2',exact:true})).toBeVisible();
  backend.rows.push(row({year:'2025-26',set_name:'Series 1',card_number:'2'}));
  await page.getByRole('button',{name:'Refresh collection',exact:true}).click();await expect(page.getByRole('checkbox',{name:'Owned card 2',exact:true})).toBeChecked();await expect(page.getByText('100% complete',{exact:true})).toBeVisible();expect(backend.rows).toHaveLength(2);await expect(page.getByRole('button',{name:'Add owned card 2',exact:true})).toHaveCount(0);
+});
+
+
+test('complete backup restores linked binders, wanted cards, checklists and finance once while preserving owned quantities',async({page})=>{
+ const existing=row({player:'Nick Suzuki',year:'2021-22',brand:'Upper Deck',set_name:'MVP',card_number:'87',quantity:9});const backend=await fixture(page,[existing]);
+ const source=randomUUID(),variant=randomUUID(),binder=randomUUID();
+ const card={id:source,sport:'Hockey',player:'Nick Suzuki',year:'2021-22',brand:'Upper Deck',set:'MVP',subset:'',cardNumber:'87',team:'',rookie:false,autograph:false,relicPatch:false,serialNumber:'',parallel:'',gradingCompany:'',grade:'',quantity:2,estimatedValueCad:3,notes:'',frontImage:'',backImage:''};
+ const backup={format:'shadowfox-collection-backup',version:2,cards:[card,{...card,id:variant,parallel:'Silver Script'}],sections:{binders:[{id:binder,name:'Restored binder'}],memberships:[{binder_id:binder,card_id:source},{binder_id:binder,card_id:variant}],checklists:[{id:randomUUID(),title:'MVP base',sport:'Hockey',year:'2021-22',brand:'Upper Deck',set_name:'MVP',subset:'',parallel:'',entries:[{number:'87',player:'Nick Suzuki',team:''}]}],wants:[{id:randomUUID(),card_data:{sport:'Hockey',player:'Connor McDavid',quantity:1,notes:'wanted'}}],transactions:[{id:randomUUID(),card_id:source,card_label:'Nick Suzuki',kind:'purchase',occurred_on:'2026-10-01',quantity:2,amount_cents:600,fees_cents:0,cost_cents:null,notes:'receipt'}]}};
+ await page.goto('/backup');await expect(page.getByLabel('Collection backup file')).toBeEnabled();await page.getByLabel('Collection backup file').setInputFiles({name:'complete.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});await expect(page.getByRole('button',{name:'Restore complete backup'})).toBeEnabled();await page.getByRole('button',{name:'Restore complete backup'}).click();await expect(page.getByRole('status')).toContainText('Restore complete.');
+ expect(backend.rows).toHaveLength(2);expect(backend.rows.find(c=>c.id===existing.id)!.quantity).toBe(9);expect(backend.binders).toHaveLength(1);expect(backend.memberships).toHaveLength(2);expect(backend.memberships.some(m=>m.card_id===existing.id)).toBeTruthy();expect(backend.wants).toHaveLength(1);expect(backend.checklists).toHaveLength(1);expect(backend.transactions[0].card_id).toBe(existing.id);
+ await page.getByRole('button',{name:'Restore complete backup'}).click();await expect(page.getByRole('status')).toContainText('0 collection records added');expect(backend.rows).toHaveLength(2);expect(backend.transactions).toHaveLength(1);expect(backend.wants).toHaveLength(1);
+ await page.getByLabel('Include card photos').uncheck();const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Download collection backup'}).click();const download=await pending;const exported=JSON.parse(await readFile((await download.path())!,'utf8'));expect(exported.version).toBe(2);expect(exported.sections.memberships).toHaveLength(2);expect(exported.sections.checklists).toHaveLength(1);expect(exported.sections.transactions).toHaveLength(1);
 });

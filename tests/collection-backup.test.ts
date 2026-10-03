@@ -43,3 +43,14 @@ test('restore IDs are stable within an account and different between accounts, i
  const a=parseCollectionBackup(JSON.stringify([legacy])),b=parseCollectionBackup(JSON.stringify([legacy]));
  assert.equal(a.entries[0].sourceKey,b.entries[0].sourceKey);
 });
+
+test('complete backup preserves linked records and rejects invalid memberships and money before writes',()=>{
+ const original=card(),binderId=crypto.randomUUID(),wantId=crypto.randomUUID(),txId=crypto.randomUUID();
+ const sections={binders:[{id:binderId,name:'Favorites'}],memberships:[{binder_id:binderId,card_id:original.id}],checklists:[],wants:[{id:wantId,card_data:{player:'Connor McDavid',sport:'Hockey',quantity:1,notes:'wanted'}}],transactions:[{id:txId,card_id:original.id,card_label:'Nick Suzuki',kind:'purchase' as const,occurred_on:'2026-10-01',quantity:2,amount_cents:650,fees_cents:0,cost_cents:null,notes:'receipt'}]};
+ const backup=collectionBackup([original],sections),parsed=parseCollectionBackup(JSON.stringify(backup));
+ assert.equal(backup.version,2);assert.equal(parsed.sections?.memberships[0].card_id,original.id);assert.equal(parsed.sections?.transactions[0].amount_cents,650);
+ const injected={...backup,sections:{...sections,wants:[{...sections.wants[0],user_id:'foreign',card_data:{...sections.wants[0].card_data,role:'admin'}}]}};
+ const sanitized=parseCollectionBackup(JSON.stringify(injected));assert.equal('role' in sanitized.sections!.wants[0].card_data,false);assert.equal('user_id' in sanitized.sections!.wants[0],false);
+ assert.throws(()=>parseCollectionBackup(JSON.stringify({...backup,sections:{...sections,memberships:[{binder_id:binderId,card_id:crypto.randomUUID()}]}})),/missing card/);
+ assert.throws(()=>parseCollectionBackup(JSON.stringify({...backup,sections:{...sections,transactions:[{...sections.transactions[0],amount_cents:-1}]}})),/amount/);
+});

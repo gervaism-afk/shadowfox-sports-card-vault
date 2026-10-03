@@ -1,3 +1,4 @@
+import { parseBackupSections, type BackupSections } from './backup-sections';
 import { emptyCard } from './defaults';
 import { identityFields, parseIdentification } from './ai-identification';
 import { duplicateKey } from './matching';
@@ -6,7 +7,7 @@ import type { CardRecord } from './types';
 export const MAX_BACKUP_BYTES = 50 * 1024 * 1024;
 export const MAX_BACKUP_CARDS = 2000;
 export type BackupEntry = { card: CardRecord; sourceKey: string; omittedPhotos: number };
-export type BackupReview = { entries: BackupEntry[]; exportedAt: string | null; legacy: boolean };
+export type BackupReview = { entries: BackupEntry[]; exportedAt: string | null; legacy: boolean; sections?: BackupSections };
 export type RestoreEntry = BackupEntry & { restoreId: string; skip: boolean };
 function object(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value); }
 function photo(value: unknown) {
@@ -28,7 +29,7 @@ export function parseCollectionBackup(text: string): BackupReview {
   let input: unknown;
   try { input = JSON.parse(text); } catch { throw new Error('This file is not valid JSON. Choose a ShadowFox collection backup or JSON export.'); }
   const legacy = Array.isArray(input);
-  if (!legacy && (!object(input) || input.format !== 'shadowfox-collection-backup' || input.version !== 1)) throw new Error('This is not a supported ShadowFox collection backup.');
+  if (!legacy && (!object(input) || input.format !== 'shadowfox-collection-backup' || ![1,2].includes(input.version as number))) throw new Error('This is not a supported ShadowFox collection backup.');
   const rows = legacy ? input as unknown[] : (input as Record<string,unknown>).cards;
   if (!Array.isArray(rows) || rows.length > MAX_BACKUP_CARDS) throw new Error('A backup can contain up to 2,000 card entries.');
   const sourceIds = new Set<string>();
@@ -55,7 +56,9 @@ export function parseCollectionBackup(text: string): BackupReview {
     } catch (error) { throw new Error(`Card ${index + 1}: ${error instanceof Error ? error.message : 'Invalid record.'}`); }
   });
   const exportedAt = !legacy && object(input) && typeof input.exportedAt === 'string' && Number.isFinite(Date.parse(input.exportedAt)) ? new Date(input.exportedAt).toISOString() : null;
-  return { entries,exportedAt,legacy };
+  const sections = !legacy && object(input) && input.version===2 ? parseBackupSections(input.sections) : undefined;
+  if(sections && sections.memberships.some(m=>!entries.some(e=>e.sourceKey===m.card_id)))throw Error('A binder membership refers to a missing card.');
+  return { entries,exportedAt,legacy,sections };
 }
 export async function restoreId(userId: string, sourceKey: string): Promise<string> {
   const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`shadowfox-restore-v1:${userId}:${sourceKey}`))).slice(0,16);
@@ -68,6 +71,6 @@ export async function reviewRestore(entries: BackupEntry[], existing: CardRecord
   const identities = new Set(existing.map(duplicateKey));
   return Promise.all(entries.map(async entry => { const id = await restoreId(userId,entry.sourceKey); return { ...entry,restoreId:id,skip:ids.has(id)||identities.has(duplicateKey(entry.card)) }; }));
 }
-export function collectionBackup(cards: CardRecord[]) {
-  return { format:'shadowfox-collection-backup',version:1,exportedAt:new Date().toISOString(),cards:cards.map(card=>Object.fromEntries(['id',...identityFields,'quantity','estimatedValueCad','notes','frontImage','backImage','createdAt','updatedAt'].map(key=>[key,card[key as keyof CardRecord]]))) };
+export function collectionBackup(cards: CardRecord[], sections?: BackupSections) {
+  return { format:'shadowfox-collection-backup',version:sections?2:1,...(sections?{sections}:{}),exportedAt:new Date().toISOString(),cards:cards.map(card=>Object.fromEntries(['id',...identityFields,'quantity','estimatedValueCad','notes','frontImage','backImage','createdAt','updatedAt'].map(key=>[key,card[key as keyof CardRecord]]))) };
 }

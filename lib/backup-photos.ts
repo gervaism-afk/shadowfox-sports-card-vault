@@ -1,10 +1,11 @@
 import { imageObjectPath, IMAGE_TYPES, MAX_IMAGE_BYTES } from './images';
 import { collectionBackup, parseCollectionBackup, MAX_BACKUP_BYTES, MAX_BACKUP_CARDS } from './collection-backup';
+import type { BackupSections } from './backup-sections';
 import type { CardRecord } from './types';
 function dataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Could not read the photo.'));reader.readAsDataURL(blob);});
 }
-export async function downloadCollectionBackup(cards: CardRecord[], ownerId: string, projectUrl: string, photos: boolean, signal: AbortSignal, progress: (completed:number,total:number)=>void) {
+export async function downloadCollectionBackup(cards: CardRecord[], ownerId: string, projectUrl: string, photos: boolean, signal: AbortSignal, progress: (completed:number,total:number)=>void, sections?: BackupSections) {
   if (cards.length > MAX_BACKUP_CARDS) throw new Error('This download supports up to 2,000 entries. Use the collection JSON export for a larger collection.');
   // Do not offer a download that our restore validator cannot read. Validate details before fetching photos.
   parseCollectionBackup(JSON.stringify(collectionBackup(cards.map(card=>({...card,frontImage:"",backImage:""})))));
@@ -24,7 +25,8 @@ export async function downloadCollectionBackup(cards: CardRecord[], ownerId: str
     prepared.push(next);progress(prepared.length,cards.length);
   }
   signal.throwIfAborted();
-  const blob=new Blob([JSON.stringify(collectionBackup(prepared))],{type:'application/json'});
+  const serialized=JSON.stringify(collectionBackup(prepared,sections));parseCollectionBackup(serialized);
+  const blob=new Blob([serialized],{type:'application/json'});
   if(blob.size>MAX_BACKUP_BYTES)throw new Error('This backup exceeds the 50 MB file limit. Download without photos.');
   return blob;
 }
