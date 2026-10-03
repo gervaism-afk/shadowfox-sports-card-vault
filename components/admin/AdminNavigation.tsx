@@ -12,6 +12,7 @@ export default function AdminNavigation() {
           ["/admin/content", "Site content"],
           ["/admin/tools", "Catalogue tools"],
           ["/admin/system", "System status"],
+          ["/admin/activity", "Activity history"],
         ].map(([href, label]) => (
           <Link
             key={href}

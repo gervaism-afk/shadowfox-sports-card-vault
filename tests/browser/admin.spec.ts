@@ -285,3 +285,82 @@ test("admin card editor saves set, variant and quantity, and displays request fa
     0,
   );
 });
+test("admin history filters, paginates and exports only the displayed page", async ({
+  page,
+  request,
+}) => {
+  await fixture(page);
+  const events = Array.from({ length: 26 }, (_, i) => ({
+    id: String(i),
+    created_at: "2026-10-03T01:00:00Z",
+    actor_id: user.id,
+    actor_label: "Admin",
+    action: "card.updated",
+    subject_type: "card",
+    subject_id: "card-" + i,
+    summary: i === 0 ? '=HYPERLINK("unsafe")' : "Card " + i,
+    details: { fields: ["quantity", "parallel"] },
+  }));
+  await page.route("**/api/admin/activity?**", (route) => {
+    const p = new URL(route.request().url()).searchParams,
+      kind = p.get("kind"),
+      n = Number(p.get("page"));
+    return route.fulfill({
+      json:
+        kind === "user"
+          ? {
+              events: [
+                {
+                  ...events[0],
+                  action: "user.role_changed",
+                  summary: "Collector",
+                  details: { from: "user", to: "admin" },
+                },
+              ],
+              total: 1,
+              page: 1,
+              pageSize: 25,
+            }
+          : kind === "page"
+            ? { events: [], total: 0, page: 1, pageSize: 25 }
+            : {
+                events: events.slice((n - 1) * 25, n * 25),
+                total: 26,
+                page: n,
+                pageSize: 25,
+              },
+    });
+  });
+  await page.goto("/admin/activity");
+  await expect(page.locator(".adminActivityList li")).toHaveCount(25);
+  const pending = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export this page", exact: true })
+    .click();
+  const file = await pending;
+  const fs = await import("node:fs/promises");
+  const csv = await fs.readFile((await file.path())!, "utf8");
+  expect(csv.split("\r\n")).toHaveLength(26);
+  expect(csv).toContain('"\'=HYPERLINK(""unsafe"")"');
+  await page.getByRole("button", { name: "Next page", exact: true }).click();
+  await expect(page.locator(".adminActivityList li")).toHaveCount(1);
+  await expect(page.getByText("Card 25", { exact: true })).toBeVisible();
+  await page.getByLabel("Activity type").selectOption("user");
+  await expect(page.getByText("user → admin", { exact: true })).toBeVisible();
+  await page.getByLabel("Activity type").selectOption("page");
+  await expect(
+    page.getByRole("heading", { name: "No activity yet", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Export this page", exact: true }),
+  ).toBeDisabled();
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+  expect((await request.get("/api/admin/activity")).status()).toBe(401);
+});

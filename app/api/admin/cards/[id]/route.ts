@@ -25,7 +25,7 @@ export async function PATCH(
       { status: 400 },
     );
   }
-  const supabase = createAdminClient();
+  const supabase = createAdminClient(auth.user.id);
 
   const { data, error } = await supabase
     .from("cards")
@@ -47,7 +47,7 @@ export async function DELETE(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { id } = await params;
-  const supabase = createAdminClient();
+  const supabase = createAdminClient(auth.user.id);
   const { data, error } = await supabase
     .from("cards")
     .delete()

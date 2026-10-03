@@ -747,3 +747,8 @@ summary::marker { color: var(--accent); }
 .adminSourceList { padding:0; list-style:none; }
 .adminSourceList small { display:block; color:var(--muted); margin-top:5px; }
 .adminSourceList a { color:var(--accent); }
+
+.adminActivityList { list-style:none; padding:0; margin:0; }
+.adminActivityList li { padding:20px 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+.adminActivityTop { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; }
+.adminActivityTop time { color:var(--muted); font-size:12px; }

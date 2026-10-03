@@ -24,7 +24,7 @@ export async function PATCH(
       { error: "You cannot remove your own admin access here." },
       { status: 400 },
     );
-  const supabase = createAdminClient();
+  const supabase = createAdminClient(auth.user.id);
   const { data, error } = await supabase
     .from("profiles")
     .update({ role })

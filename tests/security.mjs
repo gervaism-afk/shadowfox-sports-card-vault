@@ -168,4 +168,26 @@ await db.exec('reset role; set role anon;');await assert.rejects(db.query('selec
 console.log('PASS saved set checklists isolate owners, refuse reassignment and deny anonymous reads');
 await db.exec('reset role;');await db.exec(await readFile(new URL('../supabase/migrations/20261002234604_published_checklist_sources.sql',import.meta.url),'utf8'));
 assert.equal((await db.query("select count(*)::int n from information_schema.columns where table_name='set_checklists' and column_name like 'source_%'")).rows[0].n,3);
+await db.exec(`reset role;create table if not exists public.site_content(key text primary key,value jsonb not null,updated_at timestamptz not null default now());grant all on public.site_content to service_role;`);
+await db.exec(await readFile(new URL('../supabase/migrations/20261003011723_admin_activity_history.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261003012508_admin_activity_service_access.sql',import.meta.url),'utf8'));
+await db.exec(`set role service_role;select set_config('request.headers','{}',false);`);
+const auditedCard=(await db.query(`insert into public.cards(user_id,player) values($1,'Before edit') returning id`,[b])).rows[0].id;
+await db.exec(`select set_config('request.headers','{"x-shadowfox-admin":"${a}"}',false);`);
+await db.query(`update public.cards set player='After edit',notes='private note',front_image_url='private image' where id=$1`,[auditedCard]);
+const editLog=(await db.query(`select * from public.admin_activity where subject_id=$1`,[auditedCard])).rows[0];assert.equal(editLog.actor_id,a);assert.equal(editLog.action,'card.updated');assert.deepEqual(editLog.details.fields,['notes','player']);assert.ok(!JSON.stringify(editLog).includes('private note')&&!JSON.stringify(editLog).includes('private image'));
+await db.query(`insert into public.site_content(key,value) values('shop','{"heroTitle":"New heading"}')`);assert.equal((await db.query(`select count(*)::int n from public.admin_activity where action='content.updated'`)).rows[0].n,1);
+await db.query(`update public.profiles set role='admin' where id=$1`,[b]);assert.equal((await db.query(`select count(*)::int n from public.admin_activity where action='user.role_changed'`)).rows[0].n,1);
+await db.exec(`select set_config('request.headers','{}',false);`);await db.query(`update public.profiles set role='user' where id=$1`,[b]);
+await db.exec(`select set_config('request.headers','{"x-shadowfox-admin":"${b}"}',false);`);
+await assert.rejects(db.query(`update public.cards set player='Must roll back' where id=$1`,[auditedCard]),/verified admin actor/);assert.equal((await db.query(`select player from public.cards where id=$1`,[auditedCard])).rows[0].player,'After edit');
+await db.exec(`reset role;set role authenticated;select set_config('request.jwt.claim.sub','${b}',false);select set_config('request.headers','{"x-shadowfox-admin":"${a}"}',false);`);
+await db.query(`update public.cards set player='Normal owner edit' where id=$1`,[auditedCard]);await assert.rejects(db.query('select * from public.admin_activity'),/permission denied/);await assert.rejects(db.query(`insert into public.admin_activity(actor_label,action,subject_type,subject_id,summary) values('forged','card.deleted','card','fake','fake')`),/permission denied/);
+await db.exec(`reset role;set role anon;`);await assert.rejects(db.query('select * from public.admin_activity'),/permission denied/);
+await db.exec(`reset role;revoke insert on public.admin_activity from service_role;set role service_role;select set_config('request.headers','{"x-shadowfox-admin":"${a}"}',false);`);
+await assert.rejects(db.query(`update public.cards set player='Unaudited change' where id=$1`,[auditedCard]),/permission denied/);assert.equal((await db.query('select player from public.cards where id=$1',[auditedCard])).rows[0].player,'Normal owner edit');
+await db.exec(`reset role;grant insert on public.admin_activity to service_role;set role service_role;`);await db.query('delete from public.cards where id=$1',[auditedCard]);assert.equal((await db.query(`select count(*)::int n from public.admin_activity where action='card.deleted'`)).rows[0].n,1);assert.equal((await db.query(`select count(*)::int n from public.admin_activity where action='card.updated'`)).rows[0].n,1);
+await db.exec('reset role;');
+console.log('PASS admin history is private, rejects forged actors, omits private payloads and rolls back unaudited changes');
+
 await db.close();
