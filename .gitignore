@@ -8,3 +8,11 @@ public/ocr/
 test-results/
 playwright-report/
 .vercel
+
+# Android build output and private signing material
+android/.gradle/
+android/local.properties
+android/dist/
+android/**/build/
+*.jks
+*.keystore

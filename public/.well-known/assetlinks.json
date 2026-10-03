@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ca.shadowfoxcards.vault",
+      "sha256_cert_fingerprints": [
+        "04:9C:7F:64:B2:C4:AC:45:29:73:CF:02:CD:8C:F1:2D:A2:C5:0C:26:82:EF:07:6D:A7:10:CB:B9:0A:E8:AA:4B"
+      ]
+    }
+  }
+]

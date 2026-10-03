@@ -1,0 +1,34 @@
+{
+  "packageId": "ca.shadowfoxcards.vault",
+  "host": "shadowfox-sports-card-vault.vercel.app",
+  "name": "ShadowFox Card Vault",
+  "launcherName": "ShadowFox Vault",
+  "display": "standalone",
+  "themeColor": "#141412",
+  "themeColorDark": "#141412",
+  "navigationColor": "#141412",
+  "navigationColorDark": "#141412",
+  "backgroundColor": "#141412",
+  "enableNotifications": false,
+  "startUrl": "/login",
+  "iconUrl": "https://shadowfox-sports-card-vault.vercel.app/icons/shadowfox-512.png",
+  "maskableIconUrl": "https://shadowfox-sports-card-vault.vercel.app/icons/shadowfox-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../signing/shadowfox-release.jks",
+    "alias": "shadowfox"
+  },
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "fingerprints": [
+    {
+      "name": "ShadowFox release",
+      "value": "04:9C:7F:64:B2:C4:AC:45:29:73:CF:02:CD:8C:F1:2D:A2:C5:0C:26:82:EF:07:6D:A7:10:CB:B9:0A:E8:AA:4B"
+    }
+  ],
+  "webManifestUrl": "https://shadowfox-sports-card-vault.vercel.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "minSdkVersion": 23,
+  "orientation": "default"
+}

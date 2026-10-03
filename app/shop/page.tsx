@@ -115,7 +115,7 @@ export default async function ShopLandingPage() {
       </main>
       <footer className="storeFooter">
         <span>© {new Date().getFullYear()} ShadowFox Cards</span>
-        <span>{content.footerText}</span>
+        <span>{content.footerText} · <a href="/android">Android app</a></span>
       </footer>
     </div>
   );
