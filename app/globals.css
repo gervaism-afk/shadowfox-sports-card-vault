@@ -760,4 +760,6 @@ summary::marker { color: var(--accent); }
 .scanReviewItem {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid rgba(212,176,120,.2)}
 .scanReviewItem>div {min-width:0;flex:1}.scanReviewItem p {margin:6px 0;overflow-wrap:anywhere}.scanReviewItem .btn {flex-shrink:0;font-size:12px;padding:8px}
 .scanReviewLink {background:none;border:0;padding:0;color:var(--accent,#d4b078);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
-.scanReviewField .input,input.scanReviewField {border-color:var(--accent,#d4b078);box-shadow:0 0 0 1px rgba(212,176,120,.3)}
+.scanReviewField .input,.input.scanReviewField {border-color:var(--accent,#d4b078);box-shadow:0 0 0 1px rgba(212,176,120,.3)}
+
+.bulkCollection {margin:12px 0 24px}.bulkPanel {margin-top:12px}.bulkCardSelection {max-height:300px;overflow:auto;margin:16px 0;border:1px solid rgba(255,255,255,.12);border-radius:10px}.bulkCardChoice {display:flex;gap:12px;align-items:center;padding:12px;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer}.bulkCardChoice input {flex-shrink:0;width:18px;height:18px}.bulkCardChoice span {min-width:0;overflow-wrap:anywhere}.bulkCardChoice small {display:block;margin-top:4px;opacity:.7}.bulkReview {margin-top:16px;overflow-wrap:anywhere}

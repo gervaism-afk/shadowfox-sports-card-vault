@@ -197,4 +197,31 @@ await db.exec(`select set_config('request.jwt.claim.sub','${b}',false);`);assert
 await db.exec(`select set_config('request.jwt.claim.sub','${a}',false);`);await db.query('update public.cards set estimated_value_cad=40 where id=$1',[priceCard]);assert.equal((await db.query('select price_evidence from public.cards where id=$1',[priceCard])).rows[0].price_evidence,null);
 await assert.rejects(db.query(`update public.cards set price_evidence=$2::jsonb where id=$1`,[priceCard,JSON.stringify({checkedAt:'2026-10-03',method:'manual',sourceLabel:'Manual',sourceUrl:'',estimateCad:30,sales:[]})]),/check constraint/);
 await db.exec('reset role;');console.log('PASS price evidence obeys ownership and clears stale support when only the value changes');
+
+await db.exec(await readFile(new URL('../supabase/migrations/20261003034329_bulk_collection_editing.sql',import.meta.url),'utf8'));
+const bulkOne='a1000000-0000-4000-8000-000000000001',bulkTwo='a1000000-0000-4000-8000-000000000002',bulkForeign='a1000000-0000-4000-8000-000000000003',bulkBinder='a1000000-0000-4000-8000-000000000004',foreignBinder='a1000000-0000-4000-8000-000000000005';
+await db.exec(`insert into public.cards(id,user_id,player,quantity,estimated_value_cad,parallel) values('${bulkOne}','${a}','Bulk A',9,30,'Silver'),('${bulkTwo}','${a}','Bulk B',2,15,'Gold'),('${bulkForeign}','${b}','Foreign',1,0,'');insert into public.binders(id,user_id,name) values('${bulkBinder}','${a}','Bulk test'),('${foreignBinder}','${b}','Foreign binder');`);
+await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${a}',false);`);
+await assert.rejects(db.query(`select public.bulk_update_cards(array['${bulkOne}','${bulkForeign}']::uuid[],'{"brand":"Incorrect"}','${bulkBinder}')`),/missing or unavailable/);
+assert.equal((await db.query(`select brand from public.cards where id='${bulkOne}'`)).rows[0].brand,'');
+assert.equal((await db.query(`select count(*)::int n from public.binder_cards where binder_id='${bulkBinder}'`)).rows[0].n,0);
+await assert.rejects(db.query(`select public.bulk_update_cards(array['${bulkOne}']::uuid[],'{"team":"Incorrect"}','${foreignBinder}')`),/binder is unavailable/);
+await assert.rejects(db.query(`select public.bulk_update_cards(array['${bulkOne}']::uuid[],'{"user_id":"${b}"}',null)`),/Unsupported/);
+await assert.rejects(db.query(`select public.bulk_update_cards(array['${bulkOne}']::uuid[],'{"estimated_value_cad":"999"}',null)`),/Unsupported/);
+await assert.rejects(db.query(`select public.bulk_update_cards(array['${bulkOne}','${bulkOne}']::uuid[],'{}','${bulkBinder}')`),/duplicates/);
+await db.exec(`update public.cards set price_evidence='{"checkedAt":"2026-10-03T00:00:00Z","method":"manual","sourceLabel":"Manual estimate","sourceUrl":"","estimateCad":30,"sales":[]}' where id='${bulkOne}'`);
+assert.equal((await db.query(`select public.bulk_update_cards(array['${bulkOne}','${bulkTwo}']::uuid[],'{"team":"Canadiens","parallel":""}','${bulkBinder}') n`)).rows[0].n,2);
+const bulkRows=(await db.query(`select player,team,parallel,quantity,estimated_value_cad,price_evidence from public.cards where id=any(array['${bulkOne}','${bulkTwo}']::uuid[]) order by player`)).rows;
+assert.equal(bulkRows[0].quantity,9);assert.equal(Number(bulkRows[0].estimated_value_cad),30);assert.equal(bulkRows[0].price_evidence,null);assert(bulkRows.every(row=>row.team==='Canadiens'&&row.parallel===''));
+await db.query(`select public.bulk_update_cards(array['${bulkOne}','${bulkTwo}']::uuid[],'{}','${bulkBinder}')`);
+assert.equal((await db.query(`select count(*)::int n from public.binder_cards where binder_id='${bulkBinder}'`)).rows[0].n,2);
+await db.exec('reset role;set role anon;');await assert.rejects(db.query(`select public.bulk_update_cards(array['${bulkOne}']::uuid[],'{"brand":"X"}',null)`),/permission denied/);await db.exec('reset role;');
+console.log('PASS atomic owner-only bulk changes, binder assignment, duplicate protection and pricing invalidation');
+
+await db.exec(await readFile(new URL('../supabase/migrations/20261003035143_invalidate_changed_card_pricing.sql',import.meta.url),'utf8'));
+await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${a}',false);update public.cards set price_evidence='{"checkedAt":"2026-10-03T00:00:00Z","method":"manual","sourceLabel":"Manual estimate","sourceUrl":"","estimateCad":30,"sales":[]}' where id='${bulkOne}';update public.cards set quantity=10 where id='${bulkOne}';`);
+assert.notEqual((await db.query(`select price_evidence from public.cards where id='${bulkOne}'`)).rows[0].price_evidence,null);
+await db.exec(`update public.cards set set_name='Changed set' where id='${bulkOne}'`);
+assert.equal((await db.query(`select price_evidence from public.cards where id='${bulkOne}'`)).rows[0].price_evidence,null);
+await db.exec('reset role;');console.log('PASS identity edits clear stale pricing while quantity-only edits preserve it');
 await db.close();

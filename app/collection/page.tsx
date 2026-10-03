@@ -6,6 +6,7 @@ import PageShell from "@/components/PageShell";
 import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/components/AuthProvider";
 import VaultIcon from "@/components/VaultIcon";
+import BulkCollectionActions from "@/components/BulkCollectionActions";
 import CollectionExport from "@/components/CollectionExport";
 import { filterDescription } from "@/lib/collection-export";
 import CollectionControls from "@/components/CollectionControls";
@@ -70,6 +71,7 @@ export default function CollectionPage() {
           <div><h2>{hasFilters ? "Matching cards" : "All cards"}</h2><p className="vaultResultsLabel">{cardsLoading ? "Loading your collection…" : `${filtered.length} ${filtered.length === 1 ? "entry" : "entries"}${hasFilters ? ` of ${cards.length}` : ""} in your vault`}</p></div>
           <CollectionExport cards={cards} filtered={filtered} disabled={cardsLoading || !!error} description={filterDescription(filters)}/>
         </div>
+        {!cardsLoading&&!error?<BulkCollectionActions cards={filtered} scopeKey={JSON.stringify(filters)} onSaved={async()=>setCards(await loadCards())}/>:null}
         {!error && (cardsLoading ? <section className="panel" role="status">Loading cards…</section> : !filtered.length ? <section className="vaultEmptyState"><VaultIcon name="binder" size={32} /><h2>{content.emptyTitle}</h2><p>{content.emptyText}</p>{hasFilters ? <button className="btn secondary" type="button" onClick={() => setFilters({ ...defaultFilters })}>Clear filters</button> : <Link className="btn primary" href="/scan"><VaultIcon name="scan" size={18} />Scan your first card</Link>}</section> : viewMode === "list" ? <CollectionTable cards={filtered} /> : <CollectionGrid cards={filtered} />)}
         {!cardsLoading && !error && filtered.length > 0 ? <footer className="vaultGalleryFooter"><span>{valuedEntries ? `Saved estimates: ${cad.format(totalValue(filtered))} CAD · ${valuedEntries} of ${filtered.length} entries valued` : "No estimates saved yet."}</span><Link href="/analytics">View insights <VaultIcon name="arrow" size={14} /></Link></footer> : null}
       </PageShell>

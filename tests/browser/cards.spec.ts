@@ -29,6 +29,12 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
     if (url.pathname === '/rest/v1/profiles') return route.fulfill({ headers, json: { role: 'user' } });
     if (url.pathname === '/rest/v1/card_image_cleanup') return route.fulfill({ headers, json: [] });
     if (url.pathname.startsWith('/storage/v1/object/')) return route.fulfill({ headers, json: { Key: url.pathname } });
+    if(url.pathname==='/rest/v1/rpc/bulk_update_cards') {
+      const body=request.postDataJSON(); const selected=rows.filter(card=>body.card_ids.includes(card.id));
+      if(selected.length!==body.card_ids.length)return route.fulfill({status:400,headers,json:{message:'Some selected cards are missing or unavailable.'}});
+      for(const card of selected){if(Object.entries(body.changes).some(([key,value])=>(card as any)[key]!==value))(card as any).price_evidence=null;Object.assign(card,body.changes);if(body.target_binder_id&&!memberships.some(item=>item.binder_id===body.target_binder_id&&item.card_id===card.id))memberships.push({binder_id:body.target_binder_id,card_id:card.id,user_id:userId});}
+      return route.fulfill({headers,json:selected.length});
+    }
     if (url.pathname === '/rest/v1/rpc/increment_card_quantity') {
       const { card_id, amount } = request.postDataJSON();
       const card = rows.find((card) => card.id === card_id)!;
@@ -645,4 +651,32 @@ test('uncertain scanner fields are highlighted and can be corrected or reviewed'
  await expect(review).toHaveCount(0);
  await page.getByRole('button',{name:'Save Card',exact:true}).click();await expect(page).toHaveURL(/\/collection$/);
  expect(backend.rows[0].year).toBe('2022-23');
+});
+
+
+test('bulk edits respect filters, preview explicit clears and add selected cards to a binder', async({page})=>{
+ const first=row({player:'Bulk A',quantity:9,parallel:'Silver',estimated_value_cad:30}),second=row({player:'Bulk B',quantity:2,parallel:'Gold'}),other=row({player:'Other player',team:'Toronto'});
+ const backend=await fixture(page,[first,second,other]); const binderId=randomUUID();backend.binders.push({id:binderId,name:'Bulk binder'});
+ await page.goto('/collection');await expect(page.locator('.vaultCollectionCard')).toHaveCount(3);
+ await page.getByLabel('Search your collection').fill('Bulk');
+ await page.getByRole('button',{name:'Bulk edit / add to binder'}).click();
+ await page.getByRole('button',{name:'Select matching cards',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Change team',exact:true}).check();
+ await page.locator('.bulkPanel').getByLabel('Team',{exact:true}).fill('Canadiens');
+ await page.getByRole('checkbox',{name:'Change parallel',exact:true}).check();
+ await page.getByLabel('Add selected cards to binder (optional)').selectOption(binderId);
+ await page.getByRole('button',{name:'Review bulk changes',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Review bulk changes'})).toContainText('Parallel: (clear this field)');
+ await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.getByRole('button',{name:'Apply to 2 selected cards'}).click();
+ await expect(page.getByRole('status')).toContainText('Updated 2 selected cards');
+ expect(backend.rows.filter(card=>card.player.startsWith('Bulk')).every(card=>card.team==='Canadiens'&&card.parallel==='')).toBe(true);
+ expect(backend.rows.find(card=>card.id===other.id)?.team).toBe('Toronto');
+ expect(backend.rows.find(card=>card.id===first.id)?.quantity).toBe(9);
+ expect(backend.rows.find(card=>card.id===first.id)?.estimated_value_cad).toBe(30);
+ expect(backend.memberships).toHaveLength(2);
+ await page.getByRole('button',{name:'Select matching cards',exact:true}).click();
+ await page.getByLabel('Search your collection').fill('Other');
+ await expect(page.locator('.bulkPanel')).toContainText('0 selected');
+ await expect(page.getByRole('button',{name:'Review bulk changes',exact:true})).toBeDisabled();
 });
