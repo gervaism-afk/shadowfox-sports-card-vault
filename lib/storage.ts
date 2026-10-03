@@ -108,6 +108,30 @@ function cardToRow(card: CardRecord, userId: string) {
   };
 }
 
+// Checklist imports never overwrite existing rows. Stable IDs make retries safe.
+export async function insertChecklistCards(cards: CardRecord[], expectedUserId: string) {
+  const user = await requireUser();
+  if (user.id !== expectedUserId) throw new Error("Your account changed. Please try again.");
+  if (cards.length > 100) throw new Error("Add at most 100 cards per batch.");
+  const { error } = await supabase!.from("cards").upsert(
+    cards.map(card => cardToRow(card, user.id)),
+    { onConflict: "id", ignoreDuplicates: true },
+  );
+  if (error) throw error;
+}
+
+export async function saveReferencePhotos(original: CardRecord, next: CardRecord, expectedUserId: string) {
+  const user = await requireUser();
+  if (user.id !== expectedUserId) throw new Error("Your account changed. Please try again.");
+  const { data, error } = await supabase!.from("cards").update({
+    front_image_url: next.frontImage, back_image_url: next.backImage,
+    notes: next.notes, updated_at: new Date().toISOString(),
+  }).eq("id", original.id).eq("user_id", user.id)
+    .eq("updated_at", original.updatedAt).select("id");
+  if (error) throw error;
+  return Boolean(data?.length);
+}
+
 async function uploadDataUrl(
   dataUrl: string,
   folder: "front" | "back",

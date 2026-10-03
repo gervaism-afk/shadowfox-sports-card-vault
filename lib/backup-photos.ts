@@ -2,6 +2,7 @@ import { imageObjectPath, IMAGE_TYPES, MAX_IMAGE_BYTES } from './images';
 import { collectionBackup, parseCollectionBackup, MAX_BACKUP_BYTES, MAX_BACKUP_CARDS } from './collection-backup';
 import type { BackupSections } from './backup-sections';
 import type { CardRecord } from './types';
+import { isCommonsImageUrl } from './reference-photos';
 function dataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Could not read the photo.'));reader.readAsDataURL(blob);});
 }
@@ -15,7 +16,7 @@ export async function downloadCollectionBackup(cards: CardRecord[], ownerId: str
     const next={...card,frontImage:'',backImage:''};
     if(photos) for(const side of ['frontImage','backImage'] as const) {
       const url=card[side];if(!url)continue;
-      if(!imageObjectPath(url,ownerId,projectUrl)) throw new Error(`Could not include a photo for ${card.player}. Download without photos or replace the photo and retry.`);
+      if(!imageObjectPath(url,ownerId,projectUrl) && !isCommonsImageUrl(url)) throw new Error(`Could not include a photo for ${card.player}. Download without photos or replace the photo and retry.`);
       const response=await fetch(url,{signal,cache:'no-store'});if(!response.ok)throw new Error(`Could not download a photo for ${card.player}. Try again, or turn off photos.`);
       const blob=await response.blob();if(!IMAGE_TYPES.includes(blob.type)||blob.size>MAX_IMAGE_BYTES)throw new Error(`Unsupported photo for ${card.player}. Download without photos or replace it.`);
       next[side]=await dataUrl(blob);

@@ -1,4 +1,5 @@
 "use client";
+import ReferencePhotos from "./ReferencePhotos";
 
 import { identityFields, type ReviewField } from '@/lib/ai-identification';
 import { manualPriceEvidence } from '@/lib/price-evidence';
@@ -64,6 +65,7 @@ export default function CardForm({ value, onChange, showImageFields = true, want
         <label className="checkRow"><input id={`${id}-relicPatch`} type="checkbox" checked={value.relicPatch} onChange={(e) => setField("relicPatch", e.target.checked)} /><span>Relic/Patch</span></label>
       </div>
       {showImageFields ? (<><ImagePicker label="Front Image" image={value.frontImage} onChange={(v) => setField("frontImage", v)} /><ImagePicker label="Back Image" image={value.backImage} onChange={(v) => setField("backImage", v)} /></>) : null}
+      <ReferencePhotos key={value.id} card={value} onChange={onChange}/>
     </div>
   );
 }

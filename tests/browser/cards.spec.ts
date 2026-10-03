@@ -69,9 +69,21 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
     if (url.pathname === '/rest/v1/cards') {
       if (request.method() === 'POST') {
         const saved = request.postDataJSON();
+        if (Array.isArray(saved)) {
+          const added = [];
+          for (const card of saved) {
+            if (!rows.some(existing => existing.id === card.id)) { rows.unshift(card); added.push(card); }
+          }
+          return route.fulfill({ headers, json: added });
+        }
         const index = rows.findIndex((card) => card.id === saved.id);
         if (index < 0) rows.unshift(saved); else rows[index] = saved;
         return route.fulfill({ headers, json: saved });
+      }
+      if (request.method() === 'PATCH') {
+        const matching = rows.filter(card => card.id === url.searchParams.get('id')?.slice(3) && (!url.searchParams.has('updated_at') || card.updated_at === url.searchParams.get('updated_at')?.slice(3)));
+        matching.forEach(card => Object.assign(card, request.postDataJSON()));
+        return route.fulfill({ headers, json: matching.map(card => ({ id: card.id })) });
       }
       const offset = Number(url.searchParams.get('offset') || 0);
       const limit = Math.min(Number(url.searchParams.get('limit') || 100), 100);
@@ -687,4 +699,31 @@ test('automatic sold prices load on a saved card without changing its estimate',
  const card=row({player:'Automatic Pricing',estimated_value_cad:20});const backend=await fixture(page,[card]);
  await page.route('**/api/pricing/sold?*',route=>route.fulfill({json:{status:'complete',matchedCount:2,estimateCad:3.5,checkedAt:new Date().toISOString(),message:'Prices exclude shipping.',items:[{title:'Matching card',url:'https://www.ebay.ca/itm/123',amount:3,currency:'CAD',soldAt:'2026-10-01',excludedReason:null},{title:'Different parallel',url:'https://www.ebay.ca/itm/124',amount:40,currency:'CAD',soldAt:'2026-10-01',excludedReason:'Different parallel or subset'}]}}));
  await page.goto(`/card/${card.id}`);const panel=page.getByRole('region',{name:'Automatic sold prices'});await expect(panel).toContainText('$3.50 CAD');await panel.getByText('View sold listings and excluded matches',{exact:true}).click();await expect(panel).toContainText('Excluded: Different parallel');expect(backend.rows[0].estimated_value_cad).toBe(20);await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('complete set adds only missing cards in two batches, preserves owned quantities and rechecks before saving', async ({page}) => {
+ const backend=await fixture(page,[row({year:'2026-27',set_name:'Tim Hortons',card_number:'1',player:'Tim Horton',quantity:9})]);
+ backend.checklists.push({id:randomUUID(),user_id:userId,title:'Tim Hortons complete base',sport:'Hockey',year:'2026-27',brand:'Upper Deck',set_name:'Tim Hortons',subset:'',parallel:'',entries:Array.from({length:120},(_,i)=>({number:String(i+1),player:i===0?'Tim Horton':`Player ${i+1}`,team:''}))});
+ await page.goto('/sets');await page.getByRole('button',{name:'Add complete set',exact:true}).click();await expect(page.getByRole('button',{name:'Add 119 cards to collection',exact:true})).toBeVisible();
+ backend.rows.push(row({year:'2026-27',set_name:'Tim Hortons',card_number:'2',player:'Player 2',quantity:3}));
+ await page.getByRole('button',{name:'Add 119 cards to collection',exact:true}).click();await expect(page.getByText('120 of 120 card numbers owned',{exact:true})).toBeVisible();expect(backend.rows).toHaveLength(120);expect(backend.rows.find(c=>c.card_number==='1')!.quantity).toBe(9);expect(backend.rows.find(c=>c.card_number==='2')!.quantity).toBe(3);expect(backend.calls.filter(c=>c==='POST /rest/v1/cards')).toHaveLength(2);
+ await page.reload();await expect(page.getByRole('button',{name:'Add complete set',exact:true})).toBeDisabled();
+ for(const width of [320,390,768]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+});
+
+test('selected checklist import fills matching reference sides and leaves unavailable photos blank', async ({page}) => {
+ const backend=await fixture(page);backend.checklists.push({id:randomUUID(),user_id:userId,title:'Photo set',sport:'Hockey',year:'2026-27',brand:'Upper Deck',set_name:'Tim Hortons',subset:'',parallel:'',entries:[{number:'14',player:'Nick Suzuki',team:'Montreal Canadiens'},{number:'15',player:'Jeremy Swayman',team:'Boston Bruins'}]});
+ const photo={title:'2026-27 Upper Deck Tim Hortons base card 14 Nick Suzuki front.jpg',description:'Base card front',side:'front',url:'https://upload.wikimedia.org/test.jpg',source:'https://commons.wikimedia.org/wiki/File:Test.jpg',license:'CC BY-SA 4.0',author:'Example author'};
+ await page.route('**/api/catalog/photos?**',route=>route.fulfill({json:{photos:[photo]}}));
+ await page.goto('/sets');await page.getByText('Select individual missing cards (2)',{exact:true}).click();await page.getByLabel('Select missing card 14',{exact:true}).check();await page.getByLabel('Auto-fill available open reference photos when adding').check();await page.getByRole('button',{name:'Add selected cards (1)',exact:true}).click();await page.getByRole('button',{name:'Add 1 cards to collection',exact:true}).click();await expect(page.getByText('1 of 2 card numbers owned',{exact:true})).toBeVisible();expect(backend.rows).toHaveLength(1);expect(backend.rows[0].front_image_url).toBe(photo.url);expect(backend.rows[0].back_image_url).toBe('');expect(backend.rows[0].notes).toContain(photo.source);
+ await page.getByRole('button',{name:'Add complete set',exact:true}).click();await page.getByRole('button',{name:'Add 1 cards to collection',exact:true}).click();await expect(page.getByText('2 of 2 card numbers owned',{exact:true})).toBeVisible();expect(backend.rows.find(c=>c.card_number==='15')!.front_image_url).toBe('');
+ const owned=backend.rows.find(c=>c.card_number==='14')!;owned.quantity=9;owned.front_image_url='https://example.test/my-photo.jpg';
+ await page.route('**/api/catalog/photos?**',route=>route.fulfill({json:{photos:[{...photo,title:photo.title.replace('front','back'),description:'Base card back',side:'back',url:'https://upload.wikimedia.org/back.jpg'}]}}));await page.getByRole('button',{name:'Auto-fill missing set photos',exact:true}).click();await expect(page.getByText(/Filled 1 reference image/)).toBeVisible();expect(owned.quantity).toBe(9);expect(owned.front_image_url).toBe('https://example.test/my-photo.jpg');expect(owned.back_image_url).toBe('https://upload.wikimedia.org/back.jpg');
+ await page.route('**/api/catalog/photos?**',route=>route.fulfill({json:{photos:[]}}));await page.getByRole('button',{name:'Auto-fill missing set photos',exact:true}).click();await expect(page.getByText(/No exact, unique openly licensed/)).toBeVisible();expect(backend.rows).toHaveLength(2);
+});
+
+test('manual card reference photos can be filled, reviewed and saved with attribution',async({page})=>{
+ const backend=await fixture(page);const photo={title:'2026-27 Upper Deck Tim Hortons base card 14 Nick Suzuki front.jpg',description:'Base card front',side:'front',url:'https://upload.wikimedia.org/test.jpg',source:'https://commons.wikimedia.org/wiki/File:Test.jpg',license:'CC BY-SA 4.0',author:'Example author'};await page.route('**/api/catalog/photos?**',route=>route.fulfill({json:{photos:[photo]}}));
+ await page.goto('/manual');for(const[label,value]of [['Player','Nick Suzuki'],['Year','2026-27'],['Brand','Upper Deck'],['Set','Tim Hortons'],['Card Number','14']])await page.getByLabel(label,{exact:true}).fill(value);
+ await page.getByRole('button',{name:'Auto-fill reference photos',exact:true}).click();await expect(page.getByText(/Review before saving/)).toBeVisible();expect(backend.rows).toHaveLength(0);await page.getByRole('button',{name:'Save Card',exact:true}).click();await page.waitForURL('**/collection');expect(backend.rows[0].front_image_url).toBe(photo.url);expect(backend.rows[0].notes).toContain(photo.source);expect(backend.rows[0].back_image_url).toBe('');
 });

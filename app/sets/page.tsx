@@ -4,6 +4,7 @@ import Link from "next/link";
 import AuthGate from "@/components/AuthGate";
 import PageShell from "@/components/PageShell";
 import CollectionPdfExport from "@/components/CollectionPdfExport";
+import ChecklistBulkAdd from "@/components/ChecklistBulkAdd";
 import { useAuth } from "@/components/AuthProvider";
 import { loadCards, saveCard } from "@/lib/storage";
 import {
@@ -868,6 +869,7 @@ export default function SetsPage() {
                     </button>
                   </p>
                 ) : null}
+                {!editing && user ? <ChecklistBulkAdd key={`${user.id}:${list.id}`} list={list} cards={cards} userId={user.id} busy={busy} setBusy={setBusy} onCards={setCards}/> : null}
                 <p className="helperText">
                   Select Add card or tick a missing card to add it to your
                   collection. Owned cards show a checkmark and quantity; open
