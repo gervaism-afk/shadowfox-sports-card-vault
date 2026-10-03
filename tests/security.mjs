@@ -166,4 +166,6 @@ await db.exec(`select set_config('request.jwt.claim.sub','${a}',false);`);
 await db.query('delete from public.set_checklists where id=$1',[checklist]);
 await db.exec('reset role; set role anon;');await assert.rejects(db.query('select * from public.set_checklists'),/permission denied/);
 console.log('PASS saved set checklists isolate owners, refuse reassignment and deny anonymous reads');
+await db.exec('reset role;');await db.exec(await readFile(new URL('../supabase/migrations/20261002234604_published_checklist_sources.sql',import.meta.url),'utf8'));
+assert.equal((await db.query("select count(*)::int n from information_schema.columns where table_name='set_checklists' and column_name like 'source_%'")).rows[0].n,3);
 await db.close();

@@ -1,6 +1,15 @@
 import type { CardRecord, Sport } from "./types";
 import { normalizeOption } from "./catalog/types";
-export type ChecklistEntry = { number: string; player: string; team: string };
+export type ChecklistEntry = {
+  number: string;
+  player: string;
+  team: string;
+  subset?: string;
+  parallel?: string;
+  rookie?: boolean;
+  autograph?: boolean;
+  relicPatch?: boolean;
+};
 export type SetChecklist = {
   id: string;
   title: string;
@@ -11,6 +20,9 @@ export type SetChecklist = {
   subset: string;
   parallel: string;
   entries: ChecklistEntry[];
+  source_url?: string | null;
+  source_name?: string | null;
+  source_checked_at?: string | null;
 };
 export function numberKey(value: string) {
   const clean = value.trim().replace(/^#\s*/, "").toUpperCase();
@@ -104,31 +116,122 @@ export function validateChecklist(value: Omit<SetChecklist, "id">) {
       })
       .join("\n"),
   );
-  return { ...value, entries };
+  const rich = entries.map((entry, i) => {
+    const original = value.entries[i];
+    const extras: Partial<ChecklistEntry> = {};
+    for (const key of ["subset", "parallel"] as const) {
+      if (original[key] !== undefined) {
+        if (typeof original[key] !== "string" || original[key]!.length > 150)
+          throw new Error("Invalid checklist scope.");
+        extras[key] = original[key];
+      }
+    }
+    for (const key of ["rookie", "autograph", "relicPatch"] as const) {
+      if (original[key] !== undefined) {
+        if (typeof original[key] !== "boolean")
+          throw new Error("Invalid checklist flag.");
+        extras[key] = original[key];
+      }
+    }
+    return { ...entry, ...extras };
+  });
+  if (value.source_url) {
+    const url = new URL(value.source_url);
+    if (
+      url.protocol !== "https:" ||
+      !["upperdeck.com", "baseballcardpedia.com"].includes(url.hostname)
+    )
+      throw new Error("Invalid checklist source.");
+  }
+  return { ...value, entries: rich };
+}
+export function checklistSubset(value: string) {
+  const n = normalizeOption(value)
+    .replace(/\s*-\s*/g, " ")
+    .replace(/\s+/g, " ");
+  return /^(base|base set|regular|standard)$/.test(n)
+    ? ""
+    : n
+        .replace(/^base set /, "")
+        .replace(/^ud /, "upper deck ")
+        .replace(/^upper deck canvas/, "ud canvas");
+}
+export function checklistParallel(value: string) {
+  const n = normalizeOption(value).replace(/^ud /, "");
+  return /^(base|regular|standard|none)$/.test(n) ? "" : n;
+}
+function sameProduct(card: CardRecord, list: SetChecklist) {
+  const brand = (s: string) => normalizeOption(s).replace(/^ud$/, "upper deck");
+  const set = (s: string) =>
+    normalizeOption(s)
+      .replace(/(?: hockey| baseball)$/, "")
+      .replace(/^upper deck /, "")
+      .replace(/^topps /, "")
+      .replace(/series one/, "series 1")
+      .replace(/series two/, "series 2");
+  const saved = set(card.set),
+    expected = set(list.set_name);
+  const sameSet =
+    saved === expected ||
+    (!!list.source_url &&
+      list.sport === "Baseball" &&
+      expected === "base" &&
+      ["topps", "base", "series 1", "series 2"].includes(saved));
+  return (
+    card.sport === list.sport &&
+    normalizeOption(card.year) === normalizeOption(list.year) &&
+    brand(card.brand) === brand(list.brand) &&
+    sameSet
+  );
+}
+export function matchingChecklistCards(
+  cards: CardRecord[],
+  list: SetChecklist,
+  entry: ChecklistEntry,
+) {
+  const subset = checklistSubset(entry.subset ?? list.subset),
+    parallel = checklistParallel(entry.parallel ?? list.parallel);
+  return cards.filter(
+    (card) =>
+      sameProduct(card, list) &&
+      numberKey(card.cardNumber) === numberKey(entry.number) &&
+      checklistParallel(card.parallel) === parallel &&
+      (checklistSubset(card.subset) === subset ||
+        (!!list.source_url && !checklistSubset(card.subset))) &&
+      (entry.autograph === undefined || card.autograph === entry.autograph) &&
+      (entry.relicPatch === undefined || card.relicPatch === entry.relicPatch),
+  );
 }
 export function completion(cards: CardRecord[], list: SetChecklist) {
-  const matches = cards.filter(
-    (c) =>
-      c.sport === list.sport &&
-      (["year", "brand", "subset", "parallel"] as const).every(
-        (key) => normalizeOption(c[key]) === normalizeOption(list[key]),
-      ) &&
-      normalizeOption(c.set) === normalizeOption(list.set_name),
-  );
-  const quantities = new Map<string, number>();
-  for (const card of matches) {
+  const byNumber = new Map<string, CardRecord[]>();
+  for (const card of cards) {
+    if (!sameProduct(card, list)) continue;
     const key = numberKey(card.cardNumber);
-    if (key) quantities.set(key, (quantities.get(key) || 0) + card.quantity);
+    byNumber.set(key, [...(byNumber.get(key) || []), card]);
   }
-  const rows = list.entries.map((entry) => ({
-    ...entry,
-    quantity: quantities.get(numberKey(entry.number)) || 0,
-  }));
+  const rows = list.entries.map((entry) => {
+    const records = matchingChecklistCards(
+      byNumber.get(numberKey(entry.number)) || [],
+      list,
+      entry,
+    );
+    return {
+      ...entry,
+      quantity: records.reduce((n, c) => n + c.quantity, 0),
+      cardIds: records.map((c) => c.id),
+    };
+  });
   const owned = rows.filter((r) => r.quantity > 0),
     missing = rows.filter((r) => r.quantity === 0),
     duplicates = rows.filter((r) => r.quantity > 1);
   const expected = new Set(list.entries.map((e) => numberKey(e.number)));
-  const outside = matches.filter((c) => !expected.has(numberKey(c.cardNumber)));
+  const outside = cards.filter(
+    (c) =>
+      sameProduct(c, list) &&
+      checklistSubset(c.subset) === checklistSubset(list.subset) &&
+      checklistParallel(c.parallel) === checklistParallel(list.parallel) &&
+      !expected.has(numberKey(c.cardNumber)),
+  );
   return {
     rows,
     owned,

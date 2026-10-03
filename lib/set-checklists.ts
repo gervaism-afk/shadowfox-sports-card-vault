@@ -12,7 +12,9 @@ export async function loadChecklists() {
   const rows = await fetchAllRows<SetChecklist>((from, to) =>
     db
       .from("set_checklists")
-      .select("id,title,sport,year,brand,set_name,subset,parallel,entries")
+      .select(
+        "id,title,sport,year,brand,set_name,subset,parallel,entries,source_url,source_name,source_checked_at",
+      )
       .eq("user_id", userId)
       .order("title")
       .order("id")
