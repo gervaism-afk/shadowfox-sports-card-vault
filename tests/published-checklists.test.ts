@@ -10,6 +10,16 @@ import {
   type SetChecklist,
 } from "../lib/set-completion";
 import { emptyCard } from "../lib/defaults";
+test("Tim Hortons misspelled Decription header still provides players and scoped entries", () => {
+  const html = `<table class="csv-table"><thead><tr><th>Set Name</th><th>Card</th><th>Decription</th><th>Team City</th><th>Team Name</th></tr></thead><tbody><tr><td>Base Set</td><td>14</td><td>Nick Suzuki</td><td>Montreal</td><td>Canadiens</td></tr><tr><td>Above the Ice</td><td>AI-1</td><td>Dustin Wolf</td><td>Calgary</td><td>Flames</td></tr></tbody></table>`;
+  const groups = parseUpperDeckChecklist(html);
+  const base = groups.find(g => g.id === "base-complete")!;
+  assert.equal(base.entries.length, 1);
+  assert.equal(base.entries[0].player, "Nick Suzuki");
+  assert.equal(base.entries[0].team, "Montreal Canadiens");
+  assert.equal(groups.find(g => g.label === "Above the Ice")!.entries[0].subset, "Above the Ice");
+  assert.deepEqual(parseUpperDeckChecklist(html.replace("Decription", "Unrecognized")), []);
+});
 test("published NHL table provides factual names, scope and complete base including Young Guns without merging parallels", () => {
   const html = `<table class="csv-table"><thead><tr>${["Set Name", "Card", "Description", "Team City", "Team Name", "Rookie", "Auto", "Mem/Tech"].map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${[
     ["Base Set", "1", "Mason McTavish", "Anaheim", "Ducks", "", "", ""],

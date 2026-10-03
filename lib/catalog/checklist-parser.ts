@@ -69,7 +69,10 @@ export function parseUpperDeckChecklist(html: string): PublishedGroup[] {
       "Team City",
       "Team Name",
     ].map((name) =>
-      headers.findIndex((h) => normalizeOption(h) === normalizeOption(name)),
+      headers.findIndex((h) =>
+        normalizeOption(h) === normalizeOption(name) ||
+        (name === "Description" && normalizeOption(h) === "decription"),
+      ),
     );
     if (indexes.slice(0, 3).some((i) => i < 0)) return;
     $(table)
