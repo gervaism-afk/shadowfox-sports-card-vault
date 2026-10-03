@@ -224,4 +224,7 @@ assert.notEqual((await db.query(`select price_evidence from public.cards where i
 await db.exec(`update public.cards set set_name='Changed set' where id='${bulkOne}'`);
 assert.equal((await db.query(`select price_evidence from public.cards where id='${bulkOne}'`)).rows[0].price_evidence,null);
 await db.exec('reset role;');console.log('PASS identity edits clear stale pricing while quantity-only edits preserve it');
+
+await db.exec(await readFile(new URL('../supabase/migrations/20261003123904_pricing_provider_check.sql',import.meta.url),'utf8'));
+await db.exec('set role authenticated;');await assert.rejects(db.query('select * from public.pricing_provider_checks'),/permission denied/);await db.exec('reset role;set role anon;');await assert.rejects(db.query('select * from public.pricing_provider_checks'),/permission denied/);await db.exec('reset role;set role service_role;');await db.exec("insert into public.pricing_provider_checks(id) values('apify-suzuki-v1')");await assert.rejects(db.exec("insert into public.pricing_provider_checks(id) values('apify-suzuki-v1')"),/duplicate/);await db.exec('reset role;');console.log('PASS provider diagnostic reservations are service-only and cannot be duplicated');
 await db.close();
