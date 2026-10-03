@@ -33,7 +33,19 @@ async function json(url: string) {
   });
   if (!response.ok) throw new Error("Source unavailable");
   const data = await response.json();
-  return { data, checkedAt: new Date().toISOString() };
+  return { data, checkedAt: new Date().toISOString(), totalPages: Math.min(5,Number(response.headers.get("x-wp-totalpages"))||1) };
+}
+async function hockeyIndex(url:string) {
+ const first=await json(url);
+ const rest=await Promise.all(Array.from({length:first.totalPages-1},(_,i)=>json(url+`&page=${i+2}`)));
+ return {...first,data:[...first.data,...rest.flatMap(r=>r.data)]};
+}
+async function baseballIndex(url:string) {
+ const first=await json(url);let data=first.data;const rows=[...(data.query?.allpages||[])];
+ for(let page=1;page<5&&data.continue?.apcontinue;page++){
+  const next=await json(url+'&apcontinue='+encodeURIComponent(data.continue.apcontinue));data=next.data;rows.push(...(data.query?.allpages||[]));
+ }
+ return {...first,data:{query:{allpages:rows}}};
 }
 // Cached results are shared across visitors. Source failures retain Next's last successful result;
 // a bundled, dated reference copy covers a cold-cache outage without inventing new sets.
@@ -71,8 +83,8 @@ const sets = unstable_cache(
         : `https://baseballcardpedia.com/api.php?action=query&list=allpages&apfrom=${year || current}&apto=${Number(year || current) + 1}&aplimit=500&format=json`;
     if (sport === "Hockey" && /^\d{4}$/.test(year)) {
       const responses = await Promise.all([
-        json(url),
-        json(`${urls.upperDeck}&search=${Number(year) - 1}`),
+        hockeyIndex(url),
+        hockeyIndex(`${urls.upperDeck}&search=${Number(year) - 1}`),
       ]);
       return {
         sets: dedupeSets(
@@ -81,14 +93,14 @@ const sets = unstable_cache(
         checkedAt: responses[0].checkedAt,
       };
     }
-    const response = await json(url);
+    const response = await (sport === "Hockey" ? hockeyIndex(url) : baseballIndex(url));
     const rows =
       sport === "Hockey"
         ? parseHockeySets(response.data)
         : parseBaseballSets(response.data);
     return { sets: rows, checkedAt: response.checkedAt };
   },
-  ["card-catalog-sets-v2"],
+  ["card-catalog-sets-v3"],
   { revalidate: HOURS, tags: ["card-catalog"] },
 );
 export async function getCardCatalog(

@@ -26,7 +26,7 @@ function scope(label: string) {
   let subset = label.replace(/^Base Set(?: - )?/i, "").trim(),
     parallel = "";
   const flagship =
-    /^(Clear Cut|Deluxe|Exclusives|High Gloss|Outburst(?: Red| Gold)?|Printing Plates|Oversized) Parallel(?: - (.*))?$/i.exec(
+    /^(Ice Battles|Silver Script|Gold Script|Super Script Black|Super Script|Magenta Auto|Clear Cut|Deluxe|Exclusives|High Gloss|Outburst(?: Red| Gold)?|Printing Plates|Oversized) Parallel(?: - (.*))?$/i.exec(
       label,
     );
   if (flagship) {
@@ -34,7 +34,7 @@ function scope(label: string) {
     subset = flagship[2] || "";
   } else {
     const p =
-      /^(.*?)\s+(Black and White|Printing Plates|Speckle|Red|Gold|Blue|Green|Black|Orange|Pink|Purple|Silver) Parallel(?: - (.*))?$/i.exec(
+      /^(.*?)\s+(Super Script Black|Super Script|Silver Script|Gold Script|Black and White|Printing Plates|Speckle|Sparkle|Red|Gold|Blue|Green|Black|Orange|Pink|Purple|Silver) Parallel(?: - (.*))?$/i.exec(
         label,
       );
     if (p) {
@@ -96,10 +96,10 @@ export function parseUpperDeckChecklist(html: string): PublishedGroup[] {
           team,
           subset,
           parallel,
-          rookie: !!cells[headers.indexOf("Rookie")],
-          autograph: !!cells[headers.indexOf("Auto")],
+          rookie: !!cells[headers.indexOf("Rookie")] && !/^(no|false|0|n|-)$/.test(cells[headers.indexOf("Rookie")].toLowerCase()),
+          autograph: !!cells[headers.indexOf("Auto")] && !/^(no|false|0|n|-)$/.test(cells[headers.indexOf("Auto")].toLowerCase()),
           relicPatch: /jersey|patch|memorabilia|relic/i.test(
-            cells[headers.indexOf("Mem/Tech")] || "",
+            cells[headers.findIndex(h=>/^(Mem|Mem\/Tech)$/i.test(h))] || "",
           ),
         });
         rows.set(label, entries);
@@ -129,75 +129,43 @@ export function parseUpperDeckChecklist(html: string): PublishedGroup[] {
 }
 export function parseBaseballChecklist(html: string): PublishedGroup[] {
   const $ = load(html);
-  let inBase = false,
-    section = "",
-    groupLabel = "";
-  const groups = new Map<string, ChecklistEntry[]>();
-  const nodes = $(".mw-parser-output").length
-    ? $(".mw-parser-output").find("h2,h3,h4,ul[style]")
-    : $("h2,h3,h4,ul[style]");
-  nodes.each((_, node) => {
-    const element = $(node);
-    const tag = node.tagName;
-    if (/^h[234]$/.test(tag)) {
-      const label = text(
-        element.clone().find(".mw-editsection").remove().end().text(),
-      );
-      if (tag === "h2") {
-        inBase = /^(Base Set|Base Cards|Checklist)$/i.test(label);
-        section = label;
-        groupLabel = "";
-      } else if (tag === "h3") {
-        groupLabel = label;
-      }
-      if (
-        inBase &&
-        /gimmick|variation|parallel|error|short.print|autograph|relic/i.test(
-          label,
-        )
-      )
-        inBase = false;
+  let category='', parent='', child='';
+  const groups = new Map<string, PublishedGroup>();
+  const base:ChecklistEntry[]=[];
+  const nodes = $(".mw-parser-output").length ? $(".mw-parser-output").find("h2,h3,h4,ul[style]") : $("h2,h3,h4,ul[style]");
+  nodes.each((_,node)=>{
+    const element=$(node),tag=node.tagName;
+    if(/^h[234]$/.test(tag)){
+      const label=text(element.clone().find('.mw-editsection').remove().end().text());
+      if(tag==='h2'){category=label;parent='';child='';}else if(tag==='h3'){parent=label;child='';}else child=label;
       return;
     }
-    if (!inBase) return;
-    const entries: ChecklistEntry[] = [];
-    element.children("li").each((_, li) => {
-      const raw = text($(li).text());
-      const m = /^([A-Za-z0-9][A-Za-z0-9.\-]{0,39})\s+(.+)$/.exec(raw);
-      if (!m) return;
-      const player = m[2]
-        .replace(/\s+(?:RC|LL|TC|SP|CL)(?:\s+(?:RC|LL|TC|SP|CL))*\s*$/, "")
-        .trim();
-      if (!player) return;
-      entries.push({
-        number: m[1],
-        player,
-        team: "",
-        subset: "",
-        parallel: "",
-      });
+    const isBase=/^(Base Set|Base Cards|Checklist)$/i.test(category);
+    const special=/gimmick|variation|short.print|error/i.test(parent+' '+child);
+    const supported=isBase||/^(Inserts|Parallels|Autographs|Relics|Manufactured Relics|Autographed Relics)$/i.test(category);
+    if(!supported||(!isBase&&!parent))return;
+    const label=[parent,child].filter(Boolean).join(' · ')||category;
+    // A published numbered list is required. Paragraphs and unnumbered parallel descriptions
+    // are not expanded into assumed copies of the base checklist.
+    let subset=isBase&&!special&&/^(Series (?:One|Two|1|2))?$/i.test(parent)?'':[parent,child].filter(Boolean).join(' ');
+    let parallel='';
+    if(category==='Parallels'){
+      subset=child?parent:'';parallel=child||parent;
+    }else if(isBase&&special){subset='';parallel=[parent,child].filter(Boolean).join(' ');}
+    const entries:ChecklistEntry[]=[];
+    element.children('li').each((_,li)=>{
+      const raw=text($(li).text());const m=/^([A-Za-z0-9][A-Za-z0-9.\-]{0,39})\s+(.+)$/.exec(raw);
+      if(!m||(!/\d/.test(m[1])&&!/^[A-Z0-9]+-[A-Z0-9]+$/i.test(m[1])))return;
+      const player=m[2].replace(/\s+(?:RC|LL|TC|SP|CL)(?:\s+(?:RC|LL|TC|SP|CL))*\s*$/,'').trim();
+      if(!player)return;
+      entries.push({number:m[1],player,team:'',subset,parallel,...(/\bRC\b/.test(m[2])?{rookie:true}:{}),...(/autograph/i.test(category)?{autograph:true}:{}),...(/relic/i.test(category)?{relicPatch:true}:{})});
     });
-    if (!entries.length) return;
-    const label = groupLabel || section;
-    groups.set(label, [...(groups.get(label) || []), ...entries]);
+    if(!entries.length)return;
+    const key=category+'|'+label;const saved=groups.get(key);
+    groups.set(key,{id:'',label:(!isBase?category+' · ':'')+label,subset,parallel,entries:[...(saved?.entries||[]),...entries]});
+    if(isBase&&!special)base.push(...entries);
   });
-  const result = [...groups]
-    .map(([label, entries], i) => ({
-      id: `mlb-${i}`,
-      label,
-      subset: "",
-      parallel: "",
-      entries: unique(entries),
-    }))
-    .filter((g) => g.entries.length && g.entries.length <= 2000);
-  const all = result.flatMap((g) => g.entries);
-  if (all.length && all.length <= 2000 && unique(all).length === all.length)
-    result.unshift({
-      id: "base-complete",
-      label: "Complete base set",
-      subset: "",
-      parallel: "",
-      entries: all,
-    });
+  const result=[...groups.values()].map((g,i)=>({...g,id:`mlb-${i}`,entries:unique(g.entries)})).filter(g=>g.entries.length&&g.entries.length<=2000);
+  if(base.length&&base.length<=2000&&unique(base).length===base.length)result.unshift({id:'base-complete',label:'Complete base set',subset:'',parallel:'',entries:base});
   return result;
 }

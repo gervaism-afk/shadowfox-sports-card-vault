@@ -92,3 +92,13 @@ test("published MLB base sections include both series and exclude gimmicks, para
     [],
   );
 });
+
+test('historical MVP script parallels retain parallel identity and separate rookie scopes',()=>{
+ const rows=[['Base Set','87','Nick Suzuki'],['Silver Script Parallel','87','Nick Suzuki'],['Super Script Black Parallel - Rookie SP\'s','201','Rookie Player'],['20th Anniversary Super Script Parallel','A1','Nick Suzuki']];
+ const html='<table class="csv-table"><thead><tr>'+['Set Name','Card','Description'].map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(v=>`<td>${v}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
+ const groups=parseUpperDeckChecklist(html);assert.equal(groups.find(g=>g.label==='Silver Script Parallel')?.parallel,'Silver Script');assert.equal(groups.find(g=>g.label.startsWith('Super Script Black'))?.subset,"Rookie SP's");assert.equal(groups.find(g=>g.label.startsWith('20th Anniversary'))?.parallel,'Super Script');
+});
+test('baseball inserts, alphabetic autograph numbers and explicit parallel lists stay outside the combined base',()=>{
+ const html='<h2>Base Set</h2><ul style="list-style:none"><li>1 Aaron Judge</li></ul><h2>Inserts</h2><h3>Future Stars</h3><ul style="list-style:none"><li>FS-1 Gunnar Henderson</li></ul><h2>Autographs</h2><h3>Rookie Autographs</h3><ul style="list-style:none"><li>RA-AA Andrew Abbott</li></ul><h2>Parallels</h2><h3>Gold Refractor</h3><ul style="list-style:none"><li>1 Aaron Judge</li><li>Gold serial numbered to 50</li></ul>';
+ const groups=parseBaseballChecklist(html);assert.equal(groups.find(g=>g.id==='base-complete')?.entries.length,1);assert.equal(groups.find(g=>g.subset==='Future Stars')?.entries[0].number,'FS-1');assert.equal(groups.find(g=>g.subset==='Rookie Autographs')?.entries[0].autograph,true);assert.equal(groups.find(g=>g.parallel==='Gold Refractor')?.entries.length,1);
+});
