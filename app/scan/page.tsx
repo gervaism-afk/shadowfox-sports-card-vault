@@ -13,12 +13,13 @@ import { recognizeCardImage } from "@/lib/ocr-browser";
 import { computeConfidence, parseOcrText } from "@/lib/ocr";
 import { applyOcrGuess } from "@/lib/scan";
 import { supabase } from "@/lib/supabase";
-import { identityFields, parseIdentification } from "@/lib/ai-identification";
+import { identityFields, parseIdentification, type ReviewField } from "@/lib/ai-identification";
 import { duplicateKey, ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
 
 export default function ScanPage() {
   const [card, setCard] = useState<CardRecord>(emptyCard);
   const [status, setStatus] = useState("Upload the front and back, then select Identify Card.");
+  const [reviewFields,setReviewFields]=useState<ReviewField[]>([]);
   const [aiWarnings, setAiWarnings] = useState<string[]>([]);
   const [ocrText, setOcrText] = useState("");
   const [confidence, setConfidence] = useState<number | null>(null);
@@ -52,7 +53,7 @@ export default function ScanPage() {
     const defaults = emptyCard();
     const cleared = Object.fromEntries(identityFields.map(key => [key, defaults[key]]));
     setCard({ ...value, ...cleared, ...identification.fields, estimatedValueCad: 0,priceEvidence:null });
-    setOcrText(identification.evidence); setAiWarnings(identification.warnings); setConfidence(null); setDuplicate(null);
+    setReviewFields(identification.reviewFields); setOcrText(identification.evidence); setAiWarnings(identification.warnings); setConfidence(null); setDuplicate(null);
     setStatus("AI details filled in. Review the match and edit any field before saving.");
   }
 
@@ -69,7 +70,8 @@ export default function ScanPage() {
         const text = await recognizeCardImage(card.frontImage, message => { if (!task.signal.aborted) setStatus(message); }, task.signal);
         if (task.signal.aborted) return;
         const guess = parseOcrText(text);
-        setCard(applyOcrGuess(card, guess)); setOcrText(text); setConfidence(computeConfidence(guess, text));
+        const next=applyOcrGuess(card, guess); setCard(next);
+        setReviewFields((['player','year','brand','set','cardNumber','parallel'] as const).map(field=>({field,reason:next[field]?'Read with local OCR. Check this detail against the photo.':'Not identified by local OCR. Check your card.'}))); setOcrText(text); setConfidence(computeConfidence(guess, text));
         setStatus("Text read. Review and complete the fields before saving.");
       }
     } catch (error: any) {
@@ -100,7 +102,7 @@ export default function ScanPage() {
       }
       // A new front photo starts a new card; no fields carry over from the last scan.
       const fresh = { ...emptyCard(), frontImage: image };
-      setCard(fresh); setAiWarnings([]); setOcrText(""); setConfidence(null); setDuplicate(null);
+      setCard(fresh); setReviewFields([]); setAiWarnings([]); setOcrText(""); setConfidence(null); setDuplicate(null);
       setStatus("Front photo ready. Add the back photo, then select Identify Card to read both in one scan.");
     } catch (error: any) {
       if (!task.signal.aborted) setStatus(error.message || "Could not read this image. You can enter the fields below.");
@@ -162,7 +164,7 @@ export default function ScanPage() {
         <div className="workflowPanelHeading"><h2>Make the details yours</h2><span className="helperText">All fields are editable</span></div>
         {aiWarnings.length ? <div className="workflowNotice"><strong>Before you save</strong><ul>{aiWarnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div> : null}
         <p className="helperText">Check the player, card number, parallel and grade against your photos.</p>
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={(next) => { setCard(next); setDuplicate(null); }} showImageFields={false} /></fieldset>
+        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={(next) => { setReviewFields(rows=>rows.filter(row=>next[row.field]===card[row.field])); setCard(next); setDuplicate(null); }} showImageFields={false} reviewFields={reviewFields} onReview={field=>setReviewFields(rows=>rows.filter(row=>row.field!==field))} /></fieldset>
         <details className="workflowEvidence"><summary>View detected text</summary><div className="fieldBlockWide"><label className="label" htmlFor="ocr-text">Detected text</label><textarea id="ocr-text" className="input textarea" value={ocrText} readOnly placeholder="Text detected in your photo appears here." /></div>{confidence !== null ? <p className="helperText">Field completeness: {Math.round(confidence * 100)}% — review the detected details.</p> : null}</details>
         <div className="buttonRow" style={{ marginTop: 12 }}><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
         <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value,priceEvidence) => setCard((previous) => ({ ...previous, estimatedValueCad: value, priceEvidence }))} />

@@ -619,13 +619,30 @@ test('saved pricing retains supporting sales and clears them after a manual valu
  await page.getByRole('button',{name:'Apply Estimate',exact:true}).click();
  await page.getByRole('button',{name:'Save Changes',exact:true}).click();
  await expect(page.locator('.priceEvidence')).toContainText('2');
- expect(backend.rows[0].price_evidence.sales).toHaveLength(2);
- expect(backend.rows[0].price_evidence.estimateCad).toBe(35);
+ expect((backend.rows[0] as any).price_evidence.sales).toHaveLength(2);
+ expect((backend.rows[0] as any).price_evidence.estimateCad).toBe(35);
  await page.reload();
  await expect(page.locator('.priceEvidence')).toContainText('User-reviewed sold prices');
  await page.getByRole('button',{name:'Edit card',exact:true}).click();
  await page.getByLabel('Estimated Value CAD').fill('38');
  await page.getByRole('button',{name:'Save Changes',exact:true}).click();
- expect(backend.rows[0].price_evidence.method).toBe('manual');
- expect(backend.rows[0].price_evidence.sales).toHaveLength(0);
+ expect((backend.rows[0] as any).price_evidence.method).toBe('manual');
+ expect((backend.rows[0] as any).price_evidence.sales).toHaveLength(0);
+});
+
+
+test('uncertain scanner fields are highlighted and can be corrected or reviewed', async ({page}) => {
+ const backend=await fixture(page);
+ await page.route('**/api/identify',route=>route.fulfill({json:{fields:{sport:'Hockey',player:'Nick Suzuki',year:'2021-22',brand:'Upper Deck',set:'MVP',cardNumber:'87'},warnings:[],evidence:'Synthetic test',reviewFields:[{field:'year',reason:'Season inferred from card design.'},{field:'parallel',reason:'Glare prevents a base/parallel match.'}]}}));
+ await page.goto('/scan');await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+ await page.getByRole('button',{name:'Identify Card',exact:true}).click();
+ const review=page.getByRole('region',{name:'Scan fields to review'});
+ await expect(review).toContainText('2 fields need a closer look');
+ await expect(review).toContainText('Glare prevents');
+ await page.getByLabel('Year',{exact:true}).fill('2022-23');
+ await expect(review).toContainText('1 field needs a closer look');
+ await review.getByRole('button',{name:'Mark reviewed'}).click();
+ await expect(review).toHaveCount(0);
+ await page.getByRole('button',{name:'Save Card',exact:true}).click();await expect(page).toHaveURL(/\/collection$/);
+ expect(backend.rows[0].year).toBe('2022-23');
 });

@@ -10,3 +10,10 @@ test('invalid grading and booleans are rejected rather than applied to form', ()
   assert.throws(() => parseIdentification({ fields: { gradingCompany: 'invented' } }));
   assert.throws(() => parseIdentification({ fields: { autograph: 'yes' } }));
 });
+
+test('uncertain fields use allowed names, bounded reasons and missing identity fallback', () => {
+ const result=parseIdentification({fields:{player:'Nick Suzuki',year:'2021-22',brand:'Upper Deck',set:'MVP',cardNumber:'87'},reviewFields:[{field:'parallel',reason:'Glare obscures the finish.'},{field:'parallel',reason:'Duplicate'},{field:'user_id',reason:'Injected'}]});
+ assert.deepEqual(result.reviewFields,[{field:'parallel',reason:'Glare obscures the finish.'}]);
+ const missing=parseIdentification({fields:{player:'Nick Suzuki'}});
+ assert(missing.reviewFields.some(row=>row.field==='cardNumber'));
+});

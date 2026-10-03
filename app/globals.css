@@ -755,3 +755,9 @@ summary::marker { color: var(--accent); }
 
 .priceEvidence { margin-top: 16px; overflow-wrap: anywhere; }
 .priceEvidence li { margin: 8px 0; }
+
+.scanReviewPanel {border:1px solid var(--accent,#d4b078);border-radius:12px;padding:16px;background:rgba(212,176,120,.06)}
+.scanReviewItem {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid rgba(212,176,120,.2)}
+.scanReviewItem>div {min-width:0;flex:1}.scanReviewItem p {margin:6px 0;overflow-wrap:anywhere}.scanReviewItem .btn {flex-shrink:0;font-size:12px;padding:8px}
+.scanReviewLink {background:none;border:0;padding:0;color:var(--accent,#d4b078);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+.scanReviewField .input,input.scanReviewField {border-color:var(--accent,#d4b078);box-shadow:0 0 0 1px rgba(212,176,120,.3)}

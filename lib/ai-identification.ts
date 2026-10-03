@@ -1,7 +1,8 @@
 import type { CardRecord } from './types';
 
 export const identityFields = ['sport', 'player', 'year', 'brand', 'set', 'subset', 'cardNumber', 'team', 'rookie', 'autograph', 'relicPatch', 'serialNumber', 'parallel', 'gradingCompany', 'grade'] as const;
-export type Identification = { fields: Partial<Pick<CardRecord, typeof identityFields[number]>>; warnings: string[]; evidence: string };
+export type ReviewField = { field: typeof identityFields[number]; reason: string };
+export type Identification = { fields: Partial<Pick<CardRecord, typeof identityFields[number]>>; warnings: string[]; evidence: string; reviewFields: ReviewField[] };
 export function parseIdentification(value: unknown): Identification {
   if (!value || typeof value !== 'object') throw new Error('Invalid identification response.');
   const input = value as Record<string, unknown>;
@@ -18,7 +19,15 @@ export function parseIdentification(value: unknown): Identification {
     if (key === 'gradingCompany' && !['', 'PSA', 'BGS', 'SGC', 'CGC', 'Other'].includes(String(v))) throw new Error('Invalid grading company.');
     fields[key] = v;
   }
-  return { fields, warnings: Array.isArray(input.warnings) ? input.warnings.filter((v): v is string => typeof v === 'string').slice(0, 12).map(v => v.slice(0, 500)) : [], evidence: typeof input.evidence === 'string' ? input.evidence.slice(0, 3000) : '' };
+  const reviewFields: ReviewField[] = [];
+  if (Array.isArray(input.reviewFields)) for (const item of input.reviewFields.slice(0, 30)) {
+    if (!item || typeof item !== 'object' || !identityFields.includes(item.field) || typeof item.reason !== 'string' || !item.reason.trim()) continue;
+    if (!reviewFields.some(row => row.field === item.field)) reviewFields.push({field:item.field,reason:item.reason.trim().slice(0,350)});
+  }
+  for (const field of ['player','year','brand','set','cardNumber'] as const) {
+    if (!fields[field] && !reviewFields.some(row=>row.field===field)) reviewFields.push({field,reason:'Not identified. Check your card or a published checklist.'});
+  }
+  return { fields, reviewFields, warnings: Array.isArray(input.warnings) ? input.warnings.filter((v): v is string => typeof v === 'string').slice(0, 12).map(v => v.slice(0, 500)) : [], evidence: typeof input.evidence === 'string' ? input.evidence.slice(0, 3000) : '' };
 }
 export const identificationSchema = {
   type: 'object', additionalProperties: false,
@@ -28,6 +37,7 @@ export const identificationSchema = {
       key === 'sport' ? { type: ['string', 'null'], enum: ['Hockey', 'Baseball', null] } :
       key === 'gradingCompany' ? { type: ['string', 'null'], enum: ['', 'PSA', 'BGS', 'SGC', 'CGC', 'Other', null] } : { type: ['string', 'null'] }
     ])), required: [...identityFields] },
+    reviewFields: {type:'array',items:{type:'object',additionalProperties:false,properties:{field:{type:'string',enum:[...identityFields]},reason:{type:'string'}},required:['field','reason']}},
     warnings: { type: 'array', items: { type: 'string' } }, evidence: { type: 'string' }
-  }, required: ['fields', 'warnings', 'evidence']
+  }, required: ['fields', 'warnings', 'evidence', 'reviewFields']
 };

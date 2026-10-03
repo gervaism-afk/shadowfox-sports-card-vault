@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReviewField } from '@/lib/ai-identification';
 import { manualPriceEvidence } from '@/lib/price-evidence';
 import { useId } from "react";
 import { CardRecord, GradingCompany, Sport } from "@/lib/types";
@@ -12,9 +13,10 @@ import ImagePicker from "@/components/ImagePicker";
 const gradingOptions: GradingCompany[] = ["", "PSA", "BGS", "SGC", "CGC", "Other"];
 const sportOptions: Sport[] = ["Hockey", "Baseball"];
 
-export default function CardForm({ value, onChange, showImageFields = true, wanted = false }: { value: CardRecord; onChange: (card: CardRecord) => void; showImageFields?: boolean; wanted?: boolean; }) {
+export default function CardForm({ value, onChange, showImageFields = true, wanted = false, reviewFields = [], onReview }: { value: CardRecord; onChange: (card: CardRecord) => void; showImageFields?: boolean; wanted?: boolean; reviewFields?: ReviewField[]; onReview?: (field: ReviewField["field"]) => void; }) {
   const id = useId();
-  const setField = <K extends keyof CardRecord>(key: K, next: CardRecord[K]) => onChange({ ...value, [key]: next, ...(key === "estimatedValueCad" ? {priceEvidence:manualPriceEvidence(Number(next))}: {}) });
+  const needsReview = (key:string) => reviewFields.some(row=>row.field===key);
+  const setField = <K extends keyof CardRecord>(key: K, next: CardRecord[K]) => onChange({ ...value, [key]: next, ...(key === "estimatedValueCad" ? {priceEvidence:manualPriceEvidence(Number(next))}: ["sport","player","year","brand","set","subset","cardNumber","parallel","gradingCompany","grade"].includes(key) && next !== value[key] ? {priceEvidence:null}: {}) });
 
   const { catalog, loading: catalogLoading, error: catalogError } = useCardCatalog(value.sport,value.year);
   const owned=useOwnedCardSuggestions().filter(card=>card.sport===value.sport);
@@ -34,9 +36,10 @@ export default function CardForm({ value, onChange, showImageFields = true, want
     subset:variantOptions("subset"),
     parallel:variantOptions("parallel"),
   };
-  function suggestion(key:'player'|'team'|'year'|'brand'|'set'|'subset'|'parallel',label:string){return <CardSuggestionInput id={`${id}-${key}`} label={label} value={value[key]} options={options[key]} onChange={next=>setField(key,next)} onSelect={key==='set'?option=>{const product=products.find(row=>row.url===option.key);onChange({...value,set:option.value,...(product&&!value.brand?{brand:product.brand}:{}),...(product&&(!value.year||(value.sport==='Hockey'&&/^\d{4}$/.test(value.year)))?{year:product.year}:{})});}:undefined}/>;}
+  function suggestion(key:'player'|'team'|'year'|'brand'|'set'|'subset'|'parallel',label:string){return <div className={needsReview(key)?"scanReviewField":""}><CardSuggestionInput id={`${id}-${key}`} label={label} value={value[key]} options={options[key]} onChange={next=>setField(key,next)} onSelect={key==='set'?option=>{const product=products.find(row=>row.url===option.key);onChange({...value,set:option.value,...(product&&!value.brand?{brand:product.brand}:{}),...(product&&(!value.year||(value.sport==='Hockey'&&/^\d{4}$/.test(value.year)))?{year:product.year}:{})});}:undefined}/></div>;}
   return (
     <div className="formGrid">
+      {reviewFields.length ? <section className="fieldBlockWide scanReviewPanel" aria-label="Scan fields to review"><h3>{reviewFields.length} {reviewFields.length===1?'field needs':'fields need'} a closer look</h3><p className="helperText">These details were uncertain or missing. Correct a field, or mark it reviewed after checking your card.</p>{reviewFields.map(row=><div className="scanReviewItem" key={row.field}><div><button type="button" className="scanReviewLink" onClick={()=>document.getElementById(`${id}-${row.field}`)?.focus()}>{({cardNumber:'Card number',serialNumber:'Serial number',relicPatch:'Relic/Patch',gradingCompany:'Grading company'} as Record<string,string>)[row.field] || row.field.charAt(0).toUpperCase()+row.field.slice(1)}</button><p className="helperText">{row.reason}</p></div><button type="button" className="btn ghost" onClick={()=>onReview?.(row.field)}>Mark reviewed</button></div>)}</section>:null}
       <div className="fieldBlockWide cardReferenceNotice"><p className="helperText">Type or choose a suggestion. Set choices follow your sport, brand and year. A listed set can fill an empty brand and year; every field stays editable. Hockey uses seasons such as 2025–26. A calendar year shows both seasons spanning it; choosing a listed set selects its exact season.</p><details><summary>{catalogLoading?'Updating reference suggestions…':'Reference sources & updates'}</summary><p className="helperText">Public references refresh automatically, with scheduled daily checks. Player lists reflect current NHL/MLB listings; use the team printed on older cards. Set coverage depends on published checklists. Unlisted sets and variations can always be entered manually.</p>{catalog?.sources.map(source=><p className="helperText" key={source.name}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.name}</a> · {source.status==='saved'?'Saved reference copy · ':''}checked {new Date(source.checkedAt).toLocaleString()}</p>)}{catalogError?<p className="helperText">{catalogError}</p>:null}</details></div>
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-sport`}> Sport</label><select id={`${id}-sport`} className="input" value={value.sport} onChange={(e) => setField("sport", e.target.value as Sport)}>{sportOptions.map((sport) => <option key={sport}>{sport}</option>)}</select></div>
       {suggestion("player","Player")}
@@ -45,7 +48,7 @@ export default function CardForm({ value, onChange, showImageFields = true, want
       {suggestion("set","Set")}
       {suggestion("subset","Subset")}
       <p className="helperText fieldBlockWide">Subset and parallel are optional. Suggestions include common terms, not a complete checklist for this release. Choose only what appears on your card; leave blank for an ordinary base card or type an unlisted variation.</p>
-      <div className="fieldBlock"><label className="label" htmlFor={`${id}-cardNumber`}> Card Number</label><input id={`${id}-cardNumber`} className="input" value={value.cardNumber} onChange={(e) => setField("cardNumber", e.target.value)} /></div>
+      <div className="fieldBlock"><label className="label" htmlFor={`${id}-cardNumber`}> Card Number</label><input id={`${id}-cardNumber`} className={needsReview("cardNumber")?"input scanReviewField":"input"} value={value.cardNumber} onChange={(e) => setField("cardNumber", e.target.value)} /></div>
       {suggestion("team","Team")}
       <div className="fieldBlock"><label className="label" htmlFor={`${id}-serialNumber`}> Serial Number</label><input id={`${id}-serialNumber`} className="input" value={value.serialNumber} onChange={(e) => setField("serialNumber", e.target.value)} /></div>
       {suggestion("parallel","Parallel")}
