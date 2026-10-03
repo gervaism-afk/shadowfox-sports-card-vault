@@ -733,3 +733,5 @@ summary::marker { color: var(--accent); }
 .setViewCard { display:block; color:var(--accent); font-size:12px; margin-top:5px; }
 .customChecklist summary { cursor:pointer; font-weight:600; }
 .customChecklist>.panel { padding:0; margin-top:20px; border:0; }
+
+.setAddCard { display:block; padding:8px 10px; margin-top:5px; font-size:12px; min-height:36px; }

@@ -374,11 +374,31 @@ export default function SetsPage() {
         .toLowerCase()
         .includes(search.toLowerCase()),
     ) || [];
+  async function refreshCollection() {
+    if (busy) return;
+    const uid = userRef.current;
+    setBusy(true);
+    setStatus("Checking your entire collection…");
+    try {
+      const latest = await loadCards();
+      if (uid === userRef.current) {
+        setCards(latest);
+        setStatus(
+          "Your entire collection has been checked. Matching cards are marked owned.",
+        );
+      }
+    } catch (e: any) {
+      if (uid === userRef.current)
+        setStatus(e.message || "Could not refresh your collection.");
+    } finally {
+      if (uid === userRef.current) setBusy(false);
+    }
+  }
   async function markOwned(entry: ChecklistEntry) {
     if (busy || !list) return;
     const uid = userRef.current;
     setBusy(true);
-    setStatus("");
+    setStatus(`Adding card #${entry.number} to your collection…`);
     try {
       const latest = await loadCards();
       let next = latest;
@@ -808,6 +828,13 @@ export default function SetsPage() {
                 </div>
                 <div className="buttonRow">
                   <button
+                    className="btn primary"
+                    disabled={busy}
+                    onClick={() => void refreshCollection()}
+                  >
+                    Refresh collection
+                  </button>
+                  <button
                     className="btn ghost"
                     disabled={busy}
                     onClick={() => begin(list)}
@@ -830,12 +857,23 @@ export default function SetsPage() {
                     filterDescription={list.title}
                   />
                 </div>
+                {editing ? (
+                  <p className="workflowNotice">
+                    Finish your checklist edit to add owned cards.{" "}
+                    <button
+                      className="btn ghost"
+                      onClick={() => setEditing(false)}
+                    >
+                      Cancel edit
+                    </button>
+                  </p>
+                ) : null}
                 <p className="helperText">
-                  Tick a missing card to add it to your collection. Owned cards
-                  show a checkmark and quantity; open their collection entry to
-                  change or remove them. Print / PDF generates only missing
-                  cards. It does not add items to your saved Want list or
-                  inventory.
+                  Select Add card or tick a missing card to add it to your
+                  collection. Owned cards show a checkmark and quantity; open
+                  their collection entry to change or remove them. Print / PDF
+                  generates only missing cards. It does not add items to your
+                  saved Want list or inventory.
                 </p>
                 {result.outside.length ? (
                   <p className="workflowNotice">
@@ -901,7 +939,16 @@ export default function SetsPage() {
                           >
                             View card
                           </Link>
-                        ) : null}
+                        ) : (
+                          <button
+                            className="btn ghost setAddCard"
+                            aria-label={`Add owned card ${e.number}`}
+                            disabled={busy || editing}
+                            onClick={() => void markOwned(e)}
+                          >
+                            Add card
+                          </button>
+                        )}
                       </span>
                     </li>
                   ))}
