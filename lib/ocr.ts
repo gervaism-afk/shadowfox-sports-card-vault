@@ -27,7 +27,10 @@ function pickSport(text: string, brand: string): "Hockey" | "Baseball" | undefin
   if (BASEBALL_BRANDS.includes(brand)) return "Baseball";
   return undefined;
 }
-function pickYear(text: string) { return (text.match(/\b(19\d{2}|20\d{2})\b/) || [])[0] || ""; }
+function pickYear(text: string) {
+  const season = text.match(/\b((?:19|20)\d{2})\s*[-–—]\s*(\d{4}|\d{2})\b/);
+  return season ? `${season[1]}-${season[2].slice(-2)}` : (text.match(/\b(19\d{2}|20\d{2})\b/) || [])[0] || "";
+}
 function pickCardNumber(text: string) {
   return (
     (text.match(/(?:#\s*|No\.?\s*)([A-Z]{0,3}\d{1,4})\b/i) || [])[1] ||
@@ -55,7 +58,8 @@ function pickPlayer(text: string, brand: string, team: string, subset: string, p
 }
 export function parseOcrText(text: string): OcrGuess {
   const brand = findFirst(text, [...HOCKEY_BRANDS, ...BASEBALL_BRANDS]);
-  const subset = findFirst(text, SET_TERMS);
+  const set = findFirst(text, ["MVP", "Series 1", "Series 2", "SP Authentic", "SPx", "Artifacts", "Parkhurst", "Ice", "Trilogy", "Black Diamond", "Metal Universe", "Bowman Chrome", "Topps Chrome", "Stadium Club", "Heritage", "Allen & Ginter"]);
+  const subset = findFirst(text, ["Young Guns", "Future Watch", "UD Canvas", "Rookie Debut"]);
   const parallel = findFirst(text, PARALLEL_TERMS);
   const team = findFirst(text, TEAMS);
   const sport = pickSport(text, brand);
@@ -65,6 +69,7 @@ export function parseOcrText(text: string): OcrGuess {
     player: pickPlayer(text, brand, team, subset, parallel) || undefined,
     year: pickYear(text) || undefined,
     brand: brand || undefined,
+    set: set || undefined,
     subset: subset || undefined,
     parallel: parallel || undefined,
     cardNumber: pickCardNumber(text) || undefined,

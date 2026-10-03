@@ -1,5 +1,5 @@
 import type { CardRecord, Sport } from "./types";
-import { normalizeOption } from "./catalog/types";
+import { normalizeOption, normalizeCardYear } from "./catalog/types";
 export type ChecklistEntry = {
   number: string;
   player: string;
@@ -179,7 +179,7 @@ function sameProduct(card: CardRecord, list: SetChecklist) {
       ["topps", "base", "series 1", "series 2"].includes(saved));
   return (
     card.sport === list.sport &&
-    normalizeOption(card.year) === normalizeOption(list.year) &&
+    normalizeCardYear(card.year) === normalizeCardYear(list.year) &&
     brand(card.brand) === brand(list.brand) &&
     sameSet
   );
@@ -247,6 +247,6 @@ export function productKey(
   card: Pick<CardRecord, "sport" | "year" | "brand" | "set">,
 ) {
   return JSON.stringify(
-    [card.sport, card.year, card.brand, card.set].map(normalizeOption),
+    [card.sport, normalizeCardYear(card.year), card.brand, card.set].map(normalizeOption),
   );
 }

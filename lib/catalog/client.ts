@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { loadCards } from "@/lib/storage";
 import type { CardRecord, Sport } from "../types";
-import type { CardCatalog } from "./types";
+import { normalizeCardYear, type CardCatalog } from "./types";
 const requests = new Map<
   string,
   { at: number; promise: Promise<CardCatalog> }
@@ -33,8 +33,9 @@ export function useCardCatalog(sport: Sport, year: string, scope = "all") {
   const [catalog, setCatalog] = useState<CardCatalog | null>(null),
     [loading, setLoading] = useState(false),
     [error, setError] = useState("");
-  const selected = /^(18|19|20)\d{2}(?:-\d{2})?$/.test(year.trim())
-    ? year.trim()
+  const canonicalYear = normalizeCardYear(year);
+  const selected = /^(18|19|20)\d{2}(?:-\d{2})?$/.test(canonicalYear)
+    ? canonicalYear
     : "";
   useEffect(() => {
     let active = true;

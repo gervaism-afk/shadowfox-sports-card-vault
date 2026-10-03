@@ -10,9 +10,17 @@ export function optionValues(values: string[]) {
   return [...unique.values()].sort((a,b)=>a.localeCompare(b,'en',{numeric:true,sensitivity:'base'}));
 }
 
+// Keep explicit seasons exact while accepting spacing, dash and full end-year forms.
+export function normalizeCardYear(value: string) {
+  const clean = normalizeOption(value).replace(/\s*-\s*/g, '-');
+  const full = /^(\d{4})-(\d{4})$/.exec(clean);
+  return full && Number(full[2]) === Number(full[1]) + 1
+    ? `${full[1]}-${full[2].slice(-2)}` : clean;
+}
+
 // A calendar year can refer to either season spanning it. A full season stays exact.
 export function matchesCatalogYear(listed:string,selected:string,sport:Sport){
- const actual=normalizeOption(listed),wanted=normalizeOption(selected);
+ const actual=normalizeCardYear(listed),wanted=normalizeCardYear(selected);
  if(!wanted)return true;
  if(actual===wanted)return true;
  if(sport!=='Hockey'||!/^\d{4}$/.test(wanted))return false;

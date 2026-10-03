@@ -50,6 +50,7 @@ export type OcrGuess = {
   player?: string;
   year?: string;
   brand?: string;
+  set?: string;
   subset?: string;
   parallel?: string;
   cardNumber?: string;

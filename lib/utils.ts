@@ -1,4 +1,4 @@
-import { normalizeOption } from "./catalog/types";
+import { normalizeOption, normalizeCardYear } from "./catalog/types";
 import { CardRecord, Filters, SortKey } from "@/lib/types";
 
 export const totalCards = (cards: CardRecord[]) => cards.reduce((sum, card) => sum + (Number(card.quantity) || 0), 0);
@@ -20,7 +20,7 @@ export function filterCards(cards: CardRecord[], filters: Filters) {
       (!filters.brand || normalizeOption(card.brand) === normalizeOption(filters.brand)) &&
       (!filters.player || normalizeOption(card.player) === normalizeOption(filters.player)) &&
       (!filters.team || normalizeOption(card.team) === normalizeOption(filters.team)) &&
-      (!filters.year || normalizeOption(card.year) === normalizeOption(filters.year)) &&
+      (!filters.year || normalizeCardYear(card.year) === normalizeCardYear(filters.year)) &&
       (!filters.set || normalizeOption(card.set) === normalizeOption(filters.set)) &&
       (!filters.subset || normalizeOption(card.subset) === normalizeOption(filters.subset)) &&
       (!filters.parallel || normalizeOption(card.parallel) === normalizeOption(filters.parallel)) &&

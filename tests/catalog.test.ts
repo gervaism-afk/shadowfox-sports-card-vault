@@ -42,3 +42,9 @@ test('calendar hockey years include both overlapping seasons without broadening 
  assert.equal(matchesCatalogYear('2025-26','2026-27','Hockey'),false);
  assert.equal(matchesCatalogYear('2025-26','2026','Baseball'),false);
 });
+
+test('collection year filters include equivalent season labels and keep other seasons separate', () => {
+ const base={...emptyCard(),sport:'Hockey' as const,year:'2021-22'};
+ const cards=[base,{...base,year:'2021 - 22'},{...base,year:'2021-2022'},{...base,year:'2021'},{...base,year:'2022-23'}];
+ assert.equal(filterCards(cards,{...defaultFilters,year:'2021–22'}).length,3);
+});

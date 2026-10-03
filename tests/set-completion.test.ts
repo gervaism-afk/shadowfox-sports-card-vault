@@ -62,3 +62,13 @@ test("checklists accept gaps, prefix numbers and optional names, reject duplicat
   assert.equal(completion([], list).percent, 0);
   assert.throws(() => validateChecklist({ ...list, year: "" }), /Enter/);
 });
+
+test("season formatting matches owned cards without treating a calendar year or another season as the same release", () => {
+  const base = { ...emptyCard(), sport: "Hockey" as const, brand: "Upper Deck", set: "Series 1", cardNumber: "1" };
+  for (const year of ["2025 - 26", "2025–26", "2025-2026"]) {
+    assert.equal(completion([{ ...base, year }], list).owned.length, 1);
+  }
+  for (const year of ["2025", "2026", "2024-25", "2025-2027"]) {
+    assert.equal(completion([{ ...base, year }], list).owned.length, 0);
+  }
+});

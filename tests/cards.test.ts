@@ -73,3 +73,13 @@ test("pagination stops at the verified total while accommodating a lower API cap
   assert.deepEqual(rows,records);assert.equal(calls,17);
   calls=0;await fetchAllRows(async()=>{calls++;return {data:[{id:1}],error:null,count:1};});assert.equal(calls,1);
 });
+
+test("local OCR retains the set and full season and clears a stale set on an unknown card", () => {
+  const guess = parseOcrText("NICK SUZUKI\nUpper Deck\n2021-22 MVP HOCKEY\nCard 87\nCanadiens");
+  assert.equal(guess.year, "2021-22");
+  assert.equal(guess.set, "MVP");
+  assert.equal(guess.subset, undefined);
+  const saved = applyOcrGuess({ ...emptyCard(), set: "Series 1" }, guess);
+  assert.equal(saved.set, "MVP");
+  assert.equal(applyOcrGuess(saved, { player: "Other Player" }).set, "");
+});
