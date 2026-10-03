@@ -735,3 +735,15 @@ summary::marker { color: var(--accent); }
 .customChecklist>.panel { padding:0; margin-top:20px; border:0; }
 
 .setAddCard { display:block; padding:8px 10px; margin-top:5px; font-size:12px; min-height:36px; }
+
+.adminWorkspace { margin-bottom:28px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+.adminToolNav { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.adminToolNav a { border:1px solid var(--line); border-radius:10px; padding:11px 14px; font-size:14px; }
+.adminToolNav a[aria-current=page] { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+.adminFields { display:grid; gap:18px; padding:0; border:0; }
+.adminFields label { display:grid; gap:8px; }
+.adminStatusList div,.adminSourceList li { display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:14px 0; border-bottom:1px solid var(--line); }
+.adminStatusList dd { margin:0; }
+.adminSourceList { padding:0; list-style:none; }
+.adminSourceList small { display:block; color:var(--muted); margin-top:5px; }
+.adminSourceList a { color:var(--accent); }

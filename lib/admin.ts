@@ -19,7 +19,13 @@ export type AdminUserRow = {
 
 export async function getMyRole(): Promise<"user" | "admin"> {
   if (!supabase) throw new Error("Supabase not configured");
-  const { data, error } = await supabase.from("profiles").select("role").maybeSingle();
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return "user";
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", sessionData.session.user.id)
+    .maybeSingle();
   if (error) throw error;
   return (data?.role === "admin" ? "admin" : "user") as "user" | "admin";
 }

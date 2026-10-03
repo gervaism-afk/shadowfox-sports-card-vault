@@ -3,16 +3,26 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthGate from "@/components/AuthGate";
+import { useAuth } from "@/components/AuthProvider";
 import { getMyRole } from "@/lib/admin";
 
 export default function AdminGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { user, loading } = useAuth();
   const [checkingRole, setCheckingRole] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+    setAllowed(false);
+    setError("");
+    setCheckingRole(true);
+    if (loading) return;
+    if (!user) {
+      setCheckingRole(false);
+      return;
+    }
 
     async function run() {
       try {
@@ -35,7 +45,7 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, user?.id, loading]);
 
   return (
     <AuthGate>

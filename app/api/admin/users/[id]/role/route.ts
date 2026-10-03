@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server';
-import { requireAdminApi } from '@/lib/auth/require-admin-api';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth/require-admin-api";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireAdminApi(req);
   if (!auth.ok) {
@@ -15,16 +15,21 @@ export async function PATCH(
   const body = await req.json();
   const role = body?.role;
 
-  if (!['user', 'admin'].includes(role)) {
-    return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+  if (!["user", "admin"].includes(role)) {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
+  if (id === auth.user.id && role === "user")
+    return NextResponse.json(
+      { error: "You cannot remove your own admin access here." },
+      { status: 400 },
+    );
   const supabase = createAdminClient();
   const { data, error } = await supabase
-    .from('profiles')
+    .from("profiles")
     .update({ role })
-    .eq('id', id)
-    .select('id, role')
+    .eq("id", id)
+    .select("id, role")
     .single();
 
   if (error) {

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,7 +7,14 @@ import { PAGE_CONTENT_DEFAULTS, EditablePageKey } from "@/lib/content/defaults";
 
 const supabase = createBrowserSupabaseClient();
 
-const PAGE_ORDER: EditablePageKey[] = ["homepage", "scan", "manual", "collection", "analytics"];
+const PAGE_ORDER: EditablePageKey[] = [
+  "shop",
+  "homepage",
+  "scan",
+  "manual",
+  "collection",
+  "analytics",
+];
 
 export default function AdminContentPage() {
   const router = useRouter();
@@ -17,7 +23,9 @@ export default function AdminContentPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [pageKey, setPageKey] = useState<EditablePageKey>("homepage");
-  const [content, setContent] = useState<Record<string, string>>({ ...PAGE_CONTENT_DEFAULTS.homepage });
+  const [content, setContent] = useState<Record<string, string>>({
+    ...PAGE_CONTENT_DEFAULTS.homepage,
+  });
 
   async function getAccessToken() {
     if (!supabase) return null;
@@ -69,7 +77,10 @@ export default function AdminContentPage() {
       const res = await apiFetch(`/api/admin/content/${nextPage}`);
       if (!res.ok) throw new Error("Failed to load content");
       const json = await res.json();
-      setContent({ ...(PAGE_CONTENT_DEFAULTS[nextPage] as Record<string, string>), ...(json?.content || {}) });
+      setContent({
+        ...(PAGE_CONTENT_DEFAULTS[nextPage] as Record<string, string>),
+        ...(json?.content || {}),
+      });
     } catch (error) {
       console.error(error);
       setMessage("Failed to load content.");
@@ -106,7 +117,11 @@ export default function AdminContentPage() {
   }
 
   if (!ready) {
-    return <div className="sfAdminShell"><div className="sfAdminBanner">Checking admin access...</div></div>;
+    return (
+      <div className="sfAdminShell">
+        <div className="sfAdminBanner">Checking admin access...</div>
+      </div>
+    );
   }
 
   return (
@@ -114,18 +129,33 @@ export default function AdminContentPage() {
       <div className="sfAdminTop">
         <div>
           <h1 className="sfPageTitle">Content Editor</h1>
-          <p className="sfMuted">Edit wording for homepage, scan, manual, collection, and analytics.</p>
+          <p className="sfMuted">
+            Edit your public storefront, vault homepage, scanner, card form,
+            collection and analytics wording.
+          </p>
         </div>
 
         <div className="sfInlineActions">
-          <button className="sfGhostBtn" onClick={() => loadPageContent(pageKey)} disabled={busy}>Reload</button>
-          <button className="sfPrimaryBtn" onClick={saveContent} disabled={busy}>
+          <button
+            className="sfGhostBtn"
+            onClick={() => loadPageContent(pageKey)}
+            disabled={busy}
+          >
+            Reload
+          </button>
+          <button
+            className="sfPrimaryBtn"
+            onClick={saveContent}
+            disabled={busy}
+          >
             {busy ? "Saving..." : "Save Content"}
           </button>
         </div>
       </div>
 
-      {message ? <div className="sfBanner sfBannerSuccess">{message}</div> : null}
+      {message ? (
+        <div className="sfBanner sfBannerSuccess">{message}</div>
+      ) : null}
 
       <div className="sfPanel">
         <div className="sfToolbar">
@@ -136,7 +166,11 @@ export default function AdminContentPage() {
               onClick={() => setPageKey(key)}
               disabled={busy}
             >
-              {key.charAt(0).toUpperCase() + key.slice(1)}
+              {key === "shop"
+                ? "Public landing page"
+                : key === "homepage"
+                  ? "Vault homepage"
+                  : key.charAt(0).toUpperCase() + key.slice(1)}
             </button>
           ))}
         </div>
@@ -150,19 +184,27 @@ export default function AdminContentPage() {
         <div className="sfEditorGrid">
           {Object.entries(content).map(([key, value]) => (
             <div className="sfEditorField" key={key}>
-              <label className="sfEditorLabel">{key}</label>
+              <label className="sfEditorLabel" htmlFor={`content-${key}`}>
+                {key.replace(/([A-Z])/g, " $1")}
+              </label>
               {String(value).length > 90 ? (
                 <textarea
+                  id={`content-${key}`}
                   className="sfTextarea"
                   rows={4}
                   value={value}
-                  onChange={(e) => setContent((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onChange={(e) =>
+                    setContent((prev) => ({ ...prev, [key]: e.target.value }))
+                  }
                 />
               ) : (
                 <input
+                  id={`content-${key}`}
                   className="sfInput"
                   value={value}
-                  onChange={(e) => setContent((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onChange={(e) =>
+                    setContent((prev) => ({ ...prev, [key]: e.target.value }))
+                  }
                 />
               )}
             </div>
