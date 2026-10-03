@@ -752,3 +752,6 @@ summary::marker { color: var(--accent); }
 .adminActivityList li { padding:20px 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
 .adminActivityTop { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; }
 .adminActivityTop time { color:var(--muted); font-size:12px; }
+
+.priceEvidence { margin-top: 16px; overflow-wrap: anywhere; }
+.priceEvidence li { margin: 8px 0; }

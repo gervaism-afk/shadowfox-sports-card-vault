@@ -190,4 +190,11 @@ await db.exec(`reset role;grant insert on public.admin_activity to service_role;
 await db.exec('reset role;');
 console.log('PASS admin history is private, rejects forged actors, omits private payloads and rolls back unaudited changes');
 
+await db.exec(await readFile(new URL('../supabase/migrations/20261003032958_card_price_evidence.sql',import.meta.url),'utf8'));
+await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${a}',false);`);
+const priceCard=(await db.query(`insert into public.cards(user_id,player,estimated_value_cad,price_evidence) values($1,'Price test',30,$2::jsonb) returning id`,[a,JSON.stringify({checkedAt:'2026-10-03T00:00:00Z',method:'reviewed-sales',sourceLabel:'Reviewed',sourceUrl:'https://130point.com/sales/',estimateCad:30,sales:[{amount:30,currency:'CAD',context:'sold'}]})])).rows[0].id;
+await db.exec(`select set_config('request.jwt.claim.sub','${b}',false);`);assert.equal((await db.query('update public.cards set estimated_value_cad=40 where id=$1 returning id',[priceCard])).rows.length,0);
+await db.exec(`select set_config('request.jwt.claim.sub','${a}',false);`);await db.query('update public.cards set estimated_value_cad=40 where id=$1',[priceCard]);assert.equal((await db.query('select price_evidence from public.cards where id=$1',[priceCard])).rows[0].price_evidence,null);
+await assert.rejects(db.query(`update public.cards set price_evidence=$2::jsonb where id=$1`,[priceCard,JSON.stringify({checkedAt:'2026-10-03',method:'manual',sourceLabel:'Manual',sourceUrl:'',estimateCad:30,sales:[]})]),/check constraint/);
+await db.exec('reset role;');console.log('PASS price evidence obeys ownership and clears stale support when only the value changes');
 await db.close();

@@ -607,3 +607,25 @@ test('complete backup restores linked binders, wanted cards, checklists and fina
  await page.getByRole('button',{name:'Restore complete backup'}).click();await expect(page.getByRole('status')).toContainText('0 collection records added');expect(backend.rows).toHaveLength(2);expect(backend.transactions).toHaveLength(1);expect(backend.wants).toHaveLength(1);
  await page.getByLabel('Include card photos').uncheck();const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Download collection backup'}).click();const download=await pending;const exported=JSON.parse(await readFile((await download.path())!,'utf8'));expect(exported.version).toBe(2);expect(exported.sections.memberships).toHaveLength(2);expect(exported.sections.checklists).toHaveLength(1);expect(exported.sections.transactions).toHaveLength(1);
 });
+
+
+test('saved pricing retains supporting sales and clears them after a manual value edit', async ({page}) => {
+ const card=row({player:'Pricing Review',estimated_value_cad:20}); const backend=await fixture(page,[card]);
+ await page.goto(`/card/${card.id}`);
+ await page.getByRole('button',{name:'Edit card',exact:true}).click();
+ await page.getByText('Estimate from sold prices',{exact:true}).click();
+ await page.getByText('Or enter confirmed CAD prices',{exact:true}).click();
+ await page.getByLabel('Sold prices in CAD').fill('30\n40');
+ await page.getByRole('button',{name:'Apply Estimate',exact:true}).click();
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ await expect(page.locator('.priceEvidence')).toContainText('2');
+ expect(backend.rows[0].price_evidence.sales).toHaveLength(2);
+ expect(backend.rows[0].price_evidence.estimateCad).toBe(35);
+ await page.reload();
+ await expect(page.locator('.priceEvidence')).toContainText('User-reviewed sold prices');
+ await page.getByRole('button',{name:'Edit card',exact:true}).click();
+ await page.getByLabel('Estimated Value CAD').fill('38');
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ expect(backend.rows[0].price_evidence.method).toBe('manual');
+ expect(backend.rows[0].price_evidence.sales).toHaveLength(0);
+});

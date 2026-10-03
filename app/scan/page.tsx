@@ -51,7 +51,7 @@ export default function ScanPage() {
     if (signal.aborted) return;
     const defaults = emptyCard();
     const cleared = Object.fromEntries(identityFields.map(key => [key, defaults[key]]));
-    setCard({ ...value, ...cleared, ...identification.fields, estimatedValueCad: 0 });
+    setCard({ ...value, ...cleared, ...identification.fields, estimatedValueCad: 0,priceEvidence:null });
     setOcrText(identification.evidence); setAiWarnings(identification.warnings); setConfidence(null); setDuplicate(null);
     setStatus("AI details filled in. Review the match and edit any field before saving.");
   }
@@ -165,7 +165,7 @@ export default function ScanPage() {
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={(next) => { setCard(next); setDuplicate(null); }} showImageFields={false} /></fieldset>
         <details className="workflowEvidence"><summary>View detected text</summary><div className="fieldBlockWide"><label className="label" htmlFor="ocr-text">Detected text</label><textarea id="ocr-text" className="input textarea" value={ocrText} readOnly placeholder="Text detected in your photo appears here." /></div>{confidence !== null ? <p className="helperText">Field completeness: {Math.round(confidence * 100)}% — review the detected details.</p> : null}</details>
         <div className="buttonRow" style={{ marginTop: 12 }}><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
-        <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value) => setCard((previous) => ({ ...previous, estimatedValueCad: value }))} />
+        <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value,priceEvidence) => setCard((previous) => ({ ...previous, estimatedValueCad: value, priceEvidence }))} />
         {duplicate ? <p className="workflowNotice">Matching card: {duplicate.player} {duplicate.year} {duplicate.brand} #{duplicate.cardNumber}.</p> : null}
         <div className="workflowSaveBar"><span className="helperText">{busy ? "Working on your card…" : "Ready when your details are."}</span><div className="buttonRow"><button className="btn primary" disabled={busy} onClick={() => save()}>{duplicate ? "Save Separately" : "Save Card"}</button>{duplicate ? <button className="btn ghost" disabled={busy} onClick={() => save(true)}>Add to Existing Quantity</button> : null}</div></div>
       </section>

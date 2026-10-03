@@ -1,11 +1,17 @@
 "use client";
+import { validatePriceEvidence, type PriceEvidence } from '@/lib/price-evidence';
 import { useEffect, useId, useRef, useState } from "react";
 import { estimateConfirmedSales, estimateSoldPrices, parsePastedSaleAmounts, parseUsdCadRate, type PastedSaleAmount, type SaleCurrency } from "@/lib/pricing";
 import { ebayQuery } from "@/lib/matching";
 import type { CardRecord } from "@/lib/types";
 
-export default function SoldPriceEstimator({ card, onApply, disabled = false }: { card: Partial<CardRecord>; onApply: (value: number) => void; disabled?: boolean }) {
+export default function SoldPriceEstimator({ card, onApply, disabled = false }: { card: Partial<CardRecord>; onApply: (value: number,evidence:PriceEvidence) => void; disabled?: boolean }) {
   const id = useId();
+  const [sourceUrl,setSourceUrl]=useState('https://130point.com/sales/');
+  const [fx,setFx]=useState<{rate:number;date:string}|null>(null);
+  function evidence(value:number,sales:PriceEvidence['sales']):PriceEvidence {
+    return validatePriceEvidence({checkedAt:new Date().toISOString(),method:'reviewed-sales',sourceLabel:'User-reviewed sold prices',sourceUrl:sourceUrl.trim(),estimateCad:value,sales,...(fx?{fxRate:fx.rate,fxDate:fx.date}:{})},value)!;
+  }
   const [prices, setPrices] = useState("");
   const [pasted, setPasted] = useState("");
   const [currency, setCurrency] = useState<SaleCurrency>('USD');
@@ -18,7 +24,7 @@ export default function SoldPriceEstimator({ card, onApply, disabled = false }: 
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   const query = ebayQuery(card);
-  function resetPreview() { setPreview(null); setRateNote(''); setMessage(''); }
+  function resetPreview() { setPreview(null); setRateNote(''); setFx(null); setMessage(''); }
   function resetPaste() { setAmounts([]); setSelected([]); resetPreview(); }
   async function calculate() {
     const included = amounts.filter(sale => selected.includes(sale.id));
@@ -32,7 +38,7 @@ export default function SoldPriceEstimator({ card, onApply, disabled = false }: 
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not load the exchange rate.');
         const fx = parseUsdCadRate({ observations: [{ d: result.date, FXUSDCAD: { v: result.rate } }] });
-        rate = fx.rate;
+        rate = fx.rate; setFx(fx);
         note = `USD converted at ${fx.rate.toFixed(4)} CAD per USD, Bank of Canada rate dated ${fx.date}. This uses a recent rate, not each sale's historical rate.`;
       }
       if (task.signal.aborted) return;
@@ -53,6 +59,7 @@ export default function SoldPriceEstimator({ card, onApply, disabled = false }: 
         }}>Copy Search Text</button>
         <a className="btn ghost" href="https://130point.com/sales/" target="_blank" rel="noreferrer">Open 130point</a>
       </div>
+      <label className="label" htmlFor={`${id}-source`}>Source link (optional)</label><input id={`${id}-source`} className="input" type="url" maxLength={1000} value={sourceUrl} onChange={e=>setSourceUrl(e.target.value)} placeholder="https://…" />
       <label className="label" htmlFor={`${id}-paste`} style={{ marginTop: 16 }}>Paste sold results</label>
       <textarea id={`${id}-paste`} className="input textarea" maxLength={30000} value={pasted} onChange={event => { setPasted(event.target.value); resetPaste(); }} placeholder={"Paste copied results or prices, for example:\nSold price: US $25.00\nSold price: CAD $38.00"} />
       <label className="label" htmlFor={`${id}-currency`}>Currency for amounts without a currency code</label>
@@ -72,7 +79,7 @@ export default function SoldPriceEstimator({ card, onApply, disabled = false }: 
       {preview ? <div style={{ marginTop: 12 }}>
         <p className="helperText">Suggested value: <strong>${preview.estimateCad.toFixed(2)} CAD</strong>. Median of {preview.sampleCount} selected {preview.sampleCount === 1 ? 'price' : 'prices'}; range ${preview.low.toFixed(2)}–${preview.high.toFixed(2)} CAD.</p>
         {rateNote ? <p className="helperText">{rateNote}</p> : null}
-        <button type="button" className="btn primary" onClick={() => { onApply(preview.estimateCad); setMessage('Estimate applied. You can edit Estimated Value CAD before saving the card.'); }}>Apply Selected Estimate</button>
+        <button type="button" className="btn primary" onClick={() => { try{onApply(preview.estimateCad,evidence(preview.estimateCad,amounts.filter(s=>selected.includes(s.id))));}catch(e:any){setMessage(e.message);return;} setMessage('Estimate applied. You can edit Estimated Value CAD before saving the card.'); }}>Apply Selected Estimate</button>
       </div> : null}
       <details style={{ marginTop: 16 }}><summary>Or enter confirmed CAD prices</summary>
         <p className="helperText">Enter one sold price per line, excluding shipping.</p>
@@ -80,7 +87,7 @@ export default function SoldPriceEstimator({ card, onApply, disabled = false }: 
         <textarea id={id} className="input textarea" value={prices} onChange={(event) => { setPrices(event.target.value); setMessage(""); }} placeholder={"25.00\n30.00\n28.50"} />
         <button type="button" className="btn ghost" onClick={() => {
           try {
-            const estimate = estimateSoldPrices(prices); onApply(estimate.estimateCad);
+            const estimate = estimateSoldPrices(prices); onApply(estimate.estimateCad,validatePriceEvidence({...evidence(estimate.estimateCad,prices.trim().split(/\r?\n/).filter(v=>v.trim()).map(line=>({amount:estimateSoldPrices(line).estimateCad,currency:'CAD',context:line.trim().slice(0,350)}))),fxRate:undefined,fxDate:undefined})!);
             setMessage(`Applied median $${estimate.estimateCad.toFixed(2)} CAD from ${estimate.sampleCount} sold ${estimate.sampleCount === 1 ? "price" : "prices"} (range $${estimate.low.toFixed(2)}–$${estimate.high.toFixed(2)}). Save the card to keep this value.`);
           } catch (error: any) { setMessage(error.message); }
         }}>Apply Estimate</button>

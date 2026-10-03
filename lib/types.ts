@@ -22,6 +22,7 @@ export type CardRecord = {
   grade: string;
   quantity: number;
   estimatedValueCad: number;
+  priceEvidence?: import('./price-evidence').PriceEvidence | null;
   notes: string;
   frontImage: string;
   backImage: string;

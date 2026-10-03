@@ -108,6 +108,7 @@ export default function CardDetailPage() {
             <p className="helperText">{hasEstimate ? "Value reflects your saved estimate." : "Add an estimate when you edit your card."}</p>
             <dl className="detailInfoGrid">{details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
             {card.notes ? <div className="detailNotes"><h3>Your notes</h3><p>{card.notes}</p></div> : null}
+            {card.priceEvidence && card.priceEvidence.estimateCad===card.estimatedValueCad?<section className="softPanel priceEvidence"><h3>Estimate details</h3><p className="helperText">{card.priceEvidence.method==='manual'?'Manually entered':'Sales reviewed'} {new Date(card.priceEvidence.checkedAt).toLocaleString()} · {card.priceEvidence.sales.length} supporting sales</p>{card.priceEvidence.sourceUrl?<a href={card.priceEvidence.sourceUrl} target="_blank" rel="noopener noreferrer">{card.priceEvidence.sourceLabel}</a>:<p className="helperText">{card.priceEvidence.sourceLabel}</p>}{card.priceEvidence.fxRate?<p className="helperText">USD conversion: {card.priceEvidence.fxRate.toFixed(4)} CAD per USD · rate dated {card.priceEvidence.fxDate}</p>:null}{card.priceEvidence.sales.length?<details><summary>View supporting sales</summary><ul>{card.priceEvidence.sales.map((sale,index)=><li key={index}>{sale.currency} ${sale.amount.toFixed(2)} · {sale.context}</li>)}</ul><p className="helperText">Selected by the collector; not independently verified by ShadowFox.</p></details>:null}</section>:hasEstimate?<p className="helperText">No review date or supporting sales saved for this estimate.</p>:null}
             <div className="buttonRow"><Link className="btn ghost" href={`/transactions?card=${card.id}`}>Record purchase or sale</Link><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
           </section>
         </div>
@@ -116,7 +117,7 @@ export default function CardDetailPage() {
         {editing ? <section id="card-edit-panel" className="panel workflowPanel detailEditPanel">
           <div className="workflowPanelHeading"><h2 ref={editHeading} tabIndex={-1}>Edit your card</h2><span className="helperText">Review, then save your changes</span></div>
           <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={setCard} showImageFields={false} /></fieldset>
-          <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value) => setCard((previous) => previous ? { ...previous, estimatedValueCad: value } : previous)} />
+          <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value,priceEvidence) => setCard((previous) => previous ? { ...previous, estimatedValueCad: value, priceEvidence } : previous)} />
           <div className="workflowSaveBar"><span className="helperText">Changes stay on this page until you save.</span><div className="buttonRow">
             <button className="btn ghost" disabled={busy} onClick={() => { setCard(savedCard); setEditing(false); setStatus(""); }}>Cancel</button>
             <button className="btn primary" disabled={busy} onClick={async () => {

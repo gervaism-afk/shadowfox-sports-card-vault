@@ -8,6 +8,8 @@ import {
 } from "@/lib/image-cleanup";
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/images";
 
+import { validatePriceEvidence } from './price-evidence';
+
 const BUCKET = "card-images";
 
 type CardRow = {
@@ -30,6 +32,7 @@ type CardRow = {
   grade: string;
   quantity: number;
   estimated_value_cad: number;
+  price_evidence?: import('./price-evidence').PriceEvidence | null;
   notes: string;
   front_image_url: string;
   back_image_url: string;
@@ -66,6 +69,7 @@ function rowToCard(row: CardRow): CardRecord {
     grade: row.grade || "",
     quantity: Number(row.quantity || 1),
     estimatedValueCad: Number(row.estimated_value_cad || 0),
+    priceEvidence: row.price_evidence || null,
     notes: row.notes || "",
     frontImage: row.front_image_url || "",
     backImage: row.back_image_url || "",
@@ -95,6 +99,7 @@ function cardToRow(card: CardRecord, userId: string) {
     grade: card.grade,
     quantity: card.quantity,
     estimated_value_cad: card.estimatedValueCad,
+    price_evidence: validatePriceEvidence(card.priceEvidence,card.estimatedValueCad),
     notes: card.notes,
     front_image_url: card.frontImage,
     back_image_url: card.backImage,

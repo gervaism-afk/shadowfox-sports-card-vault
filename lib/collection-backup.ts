@@ -1,4 +1,5 @@
 import { parseBackupSections, type BackupSections } from './backup-sections';
+import { validatePriceEvidence } from './price-evidence';
 import { emptyCard } from './defaults';
 import { identityFields, parseIdentification } from './ai-identification';
 import { duplicateKey } from './matching';
@@ -49,7 +50,7 @@ export function parseCollectionBackup(text: string): BackupReview {
       const sourceId = typeof row.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.id) ? row.id.toLowerCase() : null;
       if (sourceId && sourceIds.has(sourceId)) throw new Error('This card ID appears more than once.');
       if (sourceId) sourceIds.add(sourceId);
-      const card = { ...base, ...fields, player: row.player.trim(), quantity: row.quantity, estimatedValueCad: value, notes, frontImage: front.data, backImage: back.data, createdAt: timestamp(row.createdAt,base.createdAt) };
+      const card = { ...base, ...fields, player: row.player.trim(), quantity: row.quantity, estimatedValueCad: value, priceEvidence:validatePriceEvidence(row.priceEvidence,value), notes, frontImage: front.data, backImage: back.data, createdAt: timestamp(row.createdAt,base.createdAt) };
       // Source IDs are used only for repeat-safe restore; imported ownership/IDs are never written.
       const sourceKey = sourceId || `entry:${index}:${JSON.stringify([fields,row.quantity,value,notes,row.createdAt ?? ''])}`;
       return { card,sourceKey,omittedPhotos: front.omitted + back.omitted };
@@ -72,5 +73,5 @@ export async function reviewRestore(entries: BackupEntry[], existing: CardRecord
   return Promise.all(entries.map(async entry => { const id = await restoreId(userId,entry.sourceKey); return { ...entry,restoreId:id,skip:ids.has(id)||identities.has(duplicateKey(entry.card)) }; }));
 }
 export function collectionBackup(cards: CardRecord[], sections?: BackupSections) {
-  return { format:'shadowfox-collection-backup',version:sections?2:1,...(sections?{sections}:{}),exportedAt:new Date().toISOString(),cards:cards.map(card=>Object.fromEntries(['id',...identityFields,'quantity','estimatedValueCad','notes','frontImage','backImage','createdAt','updatedAt'].map(key=>[key,card[key as keyof CardRecord]]))) };
+  return { format:'shadowfox-collection-backup',version:sections?2:1,...(sections?{sections}:{}),exportedAt:new Date().toISOString(),cards:cards.map(card=>Object.fromEntries(['id',...identityFields,'quantity','estimatedValueCad','priceEvidence','notes','frontImage','backImage','createdAt','updatedAt'].map(key=>[key,card[key as keyof CardRecord]]))) };
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { manualPriceEvidence } from '@/lib/price-evidence';
 import { useId } from "react";
 import { CardRecord, GradingCompany, Sport } from "@/lib/types";
 import CardSuggestionInput, { type CardSuggestion } from "@/components/CardSuggestionInput";
@@ -13,7 +14,7 @@ const sportOptions: Sport[] = ["Hockey", "Baseball"];
 
 export default function CardForm({ value, onChange, showImageFields = true, wanted = false }: { value: CardRecord; onChange: (card: CardRecord) => void; showImageFields?: boolean; wanted?: boolean; }) {
   const id = useId();
-  const setField = <K extends keyof CardRecord>(key: K, next: CardRecord[K]) => onChange({ ...value, [key]: next });
+  const setField = <K extends keyof CardRecord>(key: K, next: CardRecord[K]) => onChange({ ...value, [key]: next, ...(key === "estimatedValueCad" ? {priceEvidence:manualPriceEvidence(Number(next))}: {}) });
 
   const { catalog, loading: catalogLoading, error: catalogError } = useCardCatalog(value.sport,value.year);
   const owned=useOwnedCardSuggestions().filter(card=>card.sport===value.sport);
