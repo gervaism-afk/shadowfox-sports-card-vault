@@ -96,6 +96,7 @@ export default function SetsPage() {
   const { catalog, loading: catalogLoading } = useCardCatalog(
     browseSport,
     browseYear,
+    "sets",
   );
   const importRun = useRef(0);
   useEffect(() => {
@@ -157,10 +158,26 @@ export default function SetsPage() {
         },
         existing?.id,
       );
-      const [next, owned] = await Promise.all([loadChecklists(), loadCards()]);
+      const next = [
+        ...lists.filter((l) => l.id !== id),
+        {
+          id,
+          title,
+          sport: data.sport,
+          year: data.year,
+          brand: data.brand,
+          set_name: data.set,
+          subset: group.subset,
+          parallel: group.parallel,
+          entries: group.entries,
+          source_url: data.url,
+          source_name: data.source,
+          source_checked_at: data.checkedAt,
+        },
+      ];
       if (uid !== userRef.current || run !== importRun.current) return;
       setLists(next);
-      setCards(owned);
+
       setSelected(id);
       setPublishedGroup(group.id);
       setEditing(false);
@@ -176,7 +193,7 @@ export default function SetsPage() {
       if (uid === userRef.current) setBusy(false);
     }
   }
-  async function loadPublished(product: CatalogSet) {
+  async function loadPublished(product: CatalogSet, section = "base-complete") {
     if (busy || !userRef.current) return;
     const uid = userRef.current,
       run = ++importRun.current;
@@ -186,7 +203,7 @@ export default function SetsPage() {
     setPublished(null);
     try {
       const response = await fetch(
-        `/api/catalog/checklist?sport=${browseSport}&url=${encodeURIComponent(product.url)}`,
+        `/api/catalog/checklist?sport=${browseSport}&url=${encodeURIComponent(product.url)}&section=${encodeURIComponent(section)}`,
       );
       const data = await response.json();
       if (!response.ok)
@@ -196,7 +213,10 @@ export default function SetsPage() {
       if (uid !== userRef.current || run !== importRun.current) return;
       setPublished(data);
       const group =
-        data.groups.find((g: PublishedGroup) => g.id === "base-complete") ||
+        data.groups.find(
+          (g: PublishedGroup) => g.id === section && g.entries.length,
+        ) ||
+        data.groups.find((g: PublishedGroup) => g.entries.length) ||
         data.groups[0];
       await trackPublished(data, group, run);
     } catch (e: any) {
@@ -361,6 +381,7 @@ export default function SetsPage() {
     setStatus("");
     try {
       const latest = await loadCards();
+      let next = latest;
       if (uid !== userRef.current) return;
       if (!matchingChecklistCards(latest, list, entry).length) {
         const card = {
@@ -380,9 +401,9 @@ export default function SetsPage() {
           quantity: 1,
           notes: "Added from set checklist.",
         };
-        await saveCard(card);
+        const saved = await saveCard(card);
+        next = [saved, ...latest];
       }
-      const next = await loadCards();
       if (uid !== userRef.current) return;
       setCards(next);
       setStatus(`Card #${entry.number} is owned in your collection.`);
@@ -463,7 +484,7 @@ export default function SetsPage() {
                 className="input"
                 aria-label="Set to track"
                 value={browseSet}
-                disabled={busy || sourceLoading || catalogLoading}
+                disabled={loading || busy || sourceLoading || catalogLoading}
                 onChange={(e) => {
                   const product = availableSets.find(
                     (p) => p.url === e.target.value,
@@ -493,12 +514,18 @@ export default function SetsPage() {
                     const group = published.groups.find(
                       (g) => g.id === e.target.value,
                     );
-                    if (group) void trackPublished(published, group);
+                    if (group?.entries.length)
+                      void trackPublished(published, group);
+                    else if (group)
+                      void loadPublished(
+                        { url: published.url } as CatalogSet,
+                        group.id,
+                      );
                   }}
                 >
                   {published.groups.map((g) => (
                     <option value={g.id} key={g.id}>
-                      {g.label} ({g.entries.length} cards)
+                      {g.label} ({g.count ?? g.entries.length} cards)
                     </option>
                   ))}
                 </select>
@@ -521,12 +548,12 @@ export default function SetsPage() {
             numbers and names; it does not invent missing checklists.
           </p>
         </section>
-          {status ? (
-            <p role="status" className="workflowNotice">
-              {status}
-            </p>
-          ) : null}
-          {loading ? <p role="status">Loading your sets…</p> : null}
+        {status ? (
+          <p role="status" className="workflowNotice">
+            {status}
+          </p>
+        ) : null}
+        {loading ? <p role="status">Loading your sets…</p> : null}
         <details className="panel customChecklist">
           <summary>Advanced: custom checklist</summary>
           <p className="helperText">

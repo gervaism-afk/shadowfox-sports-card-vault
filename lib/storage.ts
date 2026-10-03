@@ -2,7 +2,10 @@ import { CardRecord } from "@/lib/types";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { duplicateKey } from "@/lib/matching";
 import { fetchAllRows } from "@/lib/pagination";
-import { cleanupCardImages, removeUnreferencedCardImage } from "@/lib/image-cleanup";
+import {
+  cleanupCardImages,
+  removeUnreferencedCardImage,
+} from "@/lib/image-cleanup";
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/images";
 
 const BUCKET = "card-images";
@@ -35,10 +38,12 @@ type CardRow = {
 };
 
 async function requireUser() {
-  if (!isSupabaseConfigured() || !supabase) throw new Error("Supabase is not configured");
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) throw new Error("Please log in");
-  return data.user;
+  if (!isSupabaseConfigured() || !supabase)
+    throw new Error("Supabase is not configured");
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.user) throw new Error("Please log in");
+  // Session identifies the client request; database RLS verifies the signed JWT.
+  return data.session.user;
 }
 
 function rowToCard(row: CardRow): CardRecord {
@@ -98,14 +103,26 @@ function cardToRow(card: CardRecord, userId: string) {
   };
 }
 
-async function uploadDataUrl(dataUrl: string, folder: "front" | "back", userId: string, id: string, uploadedPaths: string[]) {
+async function uploadDataUrl(
+  dataUrl: string,
+  folder: "front" | "back",
+  userId: string,
+  id: string,
+  uploadedPaths: string[],
+) {
   if (!dataUrl || !supabase) return "";
   if (!dataUrl.startsWith("data:")) return dataUrl;
 
   const resp = await fetch(dataUrl);
   const blob = await resp.blob();
-  if (!IMAGE_TYPES.includes(blob.type) || blob.size > MAX_IMAGE_BYTES) throw new Error("Use a JPEG, PNG, or WebP image smaller than 12 MB.");
-  const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+  if (!IMAGE_TYPES.includes(blob.type) || blob.size > MAX_IMAGE_BYTES)
+    throw new Error("Use a JPEG, PNG, or WebP image smaller than 12 MB.");
+  const ext =
+    blob.type === "image/png"
+      ? "png"
+      : blob.type === "image/webp"
+        ? "webp"
+        : "jpg";
   const path = `${userId}/${folder}/${id}-${crypto.randomUUID()}.${ext}`;
 
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
@@ -120,72 +137,136 @@ async function uploadDataUrl(dataUrl: string, folder: "front" | "back", userId: 
 
 export async function loadCards(): Promise<CardRecord[]> {
   const user = await requireUser();
-  const data = await fetchAllRows<CardRow>((from, to) => supabase!.from("cards").select("*").eq("user_id", user.id)
-    .order("created_at", { ascending: false }).order("id").range(from, to));
-  void cleanupCardImages(supabase!, user.id, process.env.NEXT_PUBLIC_SUPABASE_URL!).catch(() => {});
+  const data = await fetchAllRows<CardRow>((from, to) =>
+    supabase!
+      .from("cards")
+      .select("*", { count: "exact" })
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to),
+  );
+  void cleanupCardImages(
+    supabase!,
+    user.id,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  ).catch(() => {});
   return data.map(rowToCard);
 }
 
-export async function saveCard(card: CardRecord, restore?: { expectedUserId: string; insertOnly: true }): Promise<CardRecord> {
-  if (!Number.isInteger(card.quantity) || card.quantity < 1) throw new Error("Quantity must be a whole number of at least 1");
-  if (!Number.isFinite(card.estimatedValueCad) || card.estimatedValueCad < 0) throw new Error("Estimated value must be zero or more");
+export async function saveCard(
+  card: CardRecord,
+  restore?: { expectedUserId: string; insertOnly: true },
+): Promise<CardRecord> {
+  if (!Number.isInteger(card.quantity) || card.quantity < 1)
+    throw new Error("Quantity must be a whole number of at least 1");
+  if (!Number.isFinite(card.estimatedValueCad) || card.estimatedValueCad < 0)
+    throw new Error("Estimated value must be zero or more");
   const user = await requireUser();
-  if (restore && restore.expectedUserId !== user.id) throw new Error("Your account changed. Review the backup again before restoring.");
+  if (restore && restore.expectedUserId !== user.id)
+    throw new Error(
+      "Your account changed. Review the backup again before restoring.",
+    );
   const uploadedPaths: string[] = [];
   let saved: CardRecord;
   try {
-    const front = await uploadDataUrl(card.frontImage, "front", user.id, card.id, uploadedPaths);
-    const back = await uploadDataUrl(card.backImage, "back", user.id, card.id, uploadedPaths);
+    const front = await uploadDataUrl(
+      card.frontImage,
+      "front",
+      user.id,
+      card.id,
+      uploadedPaths,
+    );
+    const back = await uploadDataUrl(
+      card.backImage,
+      "back",
+      user.id,
+      card.id,
+      uploadedPaths,
+    );
 
     const next: CardRecord = {
-    ...card,
-    frontImage: front || card.frontImage,
-    backImage: back || card.backImage,
-    updatedAt: new Date().toISOString(),
-  };
+      ...card,
+      frontImage: front || card.frontImage,
+      backImage: back || card.backImage,
+      updatedAt: new Date().toISOString(),
+    };
 
     const row = cardToRow(next, user.id);
-    const query = restore?.insertOnly ? supabase!.from("cards").insert(row) : supabase!.from("cards").upsert(row);
+    const query = restore?.insertOnly
+      ? supabase!.from("cards").insert(row)
+      : supabase!.from("cards").upsert(row);
     const { data, error } = await query.select("*").single();
     if (error) throw error;
     saved = rowToCard(data as any);
   } catch (error) {
     // Compensate for partial uploads when an image or the card row fails to save.
     for (const path of uploadedPaths) {
-      const imageUrl = supabase!.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+      const imageUrl = supabase!.storage.from(BUCKET).getPublicUrl(path)
+        .data.publicUrl;
       // A lost response can conceal a committed save. Check references before cleanup.
-      await removeUnreferencedCardImage(supabase!, user.id, imageUrl, process.env.NEXT_PUBLIC_SUPABASE_URL!).catch(() => {});
+      await removeUnreferencedCardImage(
+        supabase!,
+        user.id,
+        imageUrl,
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      ).catch(() => {});
     }
     throw error;
   }
-  void cleanupCardImages(supabase!, user.id, process.env.NEXT_PUBLIC_SUPABASE_URL!).catch(() => {});
+  void cleanupCardImages(
+    supabase!,
+    user.id,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  ).catch(() => {});
   return saved;
 }
 
-export async function findDuplicate(card: CardRecord): Promise<CardRecord | null> {
+export async function findDuplicate(
+  card: CardRecord,
+): Promise<CardRecord | null> {
   const data = await loadCards();
-  const existing = data.find((x) => duplicateKey(x) === duplicateKey(card) && x.id !== card.id);
+  const existing = data.find(
+    (x) => duplicateKey(x) === duplicateKey(card) && x.id !== card.id,
+  );
   return existing || null;
 }
 
 export async function increaseQuantity(id: string, addQty: number) {
   await requireUser();
-  if (!Number.isInteger(addQty) || addQty < 1) throw new Error("Quantity must be a positive whole number");
-  const { data, error } = await supabase!.rpc("increment_card_quantity", { card_id: id, amount: addQty });
+  if (!Number.isInteger(addQty) || addQty < 1)
+    throw new Error("Quantity must be a positive whole number");
+  const { data, error } = await supabase!.rpc("increment_card_quantity", {
+    card_id: id,
+    amount: addQty,
+  });
   if (error) throw error;
   return rowToCard(data as CardRow);
 }
 
 export async function deleteCard(id: string) {
   const user = await requireUser();
-  const { error } = await supabase!.from("cards").delete().eq("id", id).eq("user_id", user.id);
+  const { error } = await supabase!
+    .from("cards")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) throw error;
-  await cleanupCardImages(supabase!, user.id, process.env.NEXT_PUBLIC_SUPABASE_URL!).catch(() => {});
+  await cleanupCardImages(
+    supabase!,
+    user.id,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  ).catch(() => {});
 }
 
 export async function getCard(id: string): Promise<CardRecord | null> {
   const user = await requireUser();
-  const { data, error } = await supabase!.from("cards").select("*").eq("id", id).eq("user_id", user.id).maybeSingle();
+  const { data, error } = await supabase!
+    .from("cards")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
   if (error) throw error;
   return data ? rowToCard(data as any) : null;
 }

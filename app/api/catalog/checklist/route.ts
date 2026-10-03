@@ -22,7 +22,24 @@ export async function GET(request: Request) {
     );
   }
   try {
-    return NextResponse.json(await getPublishedChecklist(sport, url), {
+    const data = await getPublishedChecklist(sport, url);
+    const section = p.get("section");
+    const chosen = section
+      ? data.groups.find((g) => g.id === section) ||
+        data.groups.find((g) => g.id === "base-complete") ||
+        data.groups[0]
+      : null;
+    const result = chosen
+      ? {
+          ...data,
+          groups: data.groups.map((g) => ({
+            ...g,
+            count: g.entries.length,
+            entries: g.id === chosen.id ? g.entries : [],
+          })),
+        }
+      : data;
+    return NextResponse.json(result, {
       headers: { "Cache-Control": "public, max-age=300, s-maxage=3600" },
     });
   } catch (e: any) {

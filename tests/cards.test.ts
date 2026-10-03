@@ -66,3 +66,10 @@ test("Upper Deck MVP front and back set names match without merging variants", (
   assert.equal(duplicateKey({ ...card, team: "Canadiens" }), duplicateKey({ ...card, team: "Montreal Canadiens" }));
   assert.notEqual(duplicateKey({ ...card, team: "Canadiens" }), duplicateKey({ ...card, team: "Toronto Maple Leafs" }));
 });
+
+test("pagination stops at the verified total while accommodating a lower API cap", async () => {
+  const records=Array.from({length:1205},(_,id)=>({id})); let calls=0;
+  const rows=await fetchAllRows(async(from,to)=>{calls++;return {data:records.slice(from,Math.min(to+1,from+73)),error:null,count:records.length};});
+  assert.deepEqual(rows,records);assert.equal(calls,17);
+  calls=0;await fetchAllRows(async()=>{calls++;return {data:[{id:1}],error:null,count:1};});assert.equal(calls,1);
+});

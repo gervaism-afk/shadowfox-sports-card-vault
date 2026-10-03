@@ -7,6 +7,7 @@ export type PublishedGroup = {
   subset: string;
   parallel: string;
   entries: ChecklistEntry[];
+  count?: number;
 };
 export type PublishedChecklist = {
   sport: "Hockey" | "Baseball";

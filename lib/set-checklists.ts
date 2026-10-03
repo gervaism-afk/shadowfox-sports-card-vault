@@ -3,9 +3,9 @@ import { fetchAllRows } from "./pagination";
 import { validateChecklist, type SetChecklist } from "./set-completion";
 async function client() {
   if (!supabase) throw new Error("Please sign in.");
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) throw new Error("Please sign in again.");
-  return { db: supabase, userId: data.user.id };
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.user) throw new Error("Please sign in again.");
+  return { db: supabase, userId: data.session.user.id };
 }
 export async function loadChecklists() {
   const { db, userId } = await client();
@@ -14,6 +14,7 @@ export async function loadChecklists() {
       .from("set_checklists")
       .select(
         "id,title,sport,year,brand,set_name,subset,parallel,entries,source_url,source_name,source_checked_at",
+        { count: "exact" },
       )
       .eq("user_id", userId)
       .order("title")
