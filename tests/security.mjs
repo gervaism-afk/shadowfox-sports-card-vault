@@ -227,4 +227,11 @@ await db.exec('reset role;');console.log('PASS identity edits clear stale pricin
 
 await db.exec(await readFile(new URL('../supabase/migrations/20261003123904_pricing_provider_check.sql',import.meta.url),'utf8'));
 await db.exec('set role authenticated;');await assert.rejects(db.query('select * from public.pricing_provider_checks'),/permission denied/);await db.exec('reset role;set role anon;');await assert.rejects(db.query('select * from public.pricing_provider_checks'),/permission denied/);await db.exec('reset role;set role service_role;');await db.exec("insert into public.pricing_provider_checks(id) values('apify-suzuki-v1')");await assert.rejects(db.exec("insert into public.pricing_provider_checks(id) values('apify-suzuki-v1')"),/duplicate/);await db.exec('reset role;');console.log('PASS provider diagnostic reservations are service-only and cannot be duplicated');
+
+await db.exec(await readFile(new URL('../supabase/migrations/20261003124656_automatic_sold_price_cache.sql',import.meta.url),'utf8'));
+await db.exec('set role authenticated;');await assert.rejects(db.query("select public.reserve_sold_price_lookup('"+'a'.repeat(64)+"')"),/permission denied/);await assert.rejects(db.query('select * from public.sold_price_cache'),/permission denied/);await db.exec('reset role;set role service_role;');
+const lookupKey='a'.repeat(64);assert.equal((await db.query(`select public.reserve_sold_price_lookup('${lookupKey}') status`)).rows[0].status,'start');assert.equal((await db.query(`select public.reserve_sold_price_lookup('${lookupKey}') status`)).rows[0].status,'pending');
+await db.exec("update public.sold_price_budget set lookups=50");assert.equal((await db.query(`select public.reserve_sold_price_lookup('${'b'.repeat(64)}') status`)).rows[0].status,'budget');
+await db.exec(`update public.sold_price_cache set state='SUCCEEDED',result='{}' where query_key='${lookupKey}'`);assert.equal((await db.query(`select public.reserve_sold_price_lookup('${lookupKey}') status`)).rows[0].status,'cached');
+await db.exec('reset role;');console.log('PASS service-only sold lookup reservation deduplicates pending runs and enforces the monthly budget');
 await db.close();

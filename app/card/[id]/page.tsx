@@ -5,6 +5,7 @@ import Link from "next/link";
 import PageShell from "@/components/PageShell";
 import AuthGate from "@/components/AuthGate";
 import CardForm from "@/components/CardForm";
+import AutomaticSoldPrices from "@/components/AutomaticSoldPrices";
 import SoldPriceEstimator from "@/components/SoldPriceEstimator";
 import { useParams, useRouter } from "next/navigation";
 import { deleteCard, getCard, saveCard } from "@/lib/storage";
@@ -109,6 +110,7 @@ export default function CardDetailPage() {
             <dl className="detailInfoGrid">{details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
             {card.notes ? <div className="detailNotes"><h3>Your notes</h3><p>{card.notes}</p></div> : null}
             {card.priceEvidence && card.priceEvidence.estimateCad===card.estimatedValueCad?<section className="softPanel priceEvidence"><h3>Estimate details</h3><p className="helperText">{card.priceEvidence.method==='manual'?'Manually entered':'Sales reviewed'} {new Date(card.priceEvidence.checkedAt).toLocaleString()} · {card.priceEvidence.sales.length} supporting sales</p>{card.priceEvidence.sourceUrl?<a href={card.priceEvidence.sourceUrl} target="_blank" rel="noopener noreferrer">{card.priceEvidence.sourceLabel}</a>:<p className="helperText">{card.priceEvidence.sourceLabel}</p>}{card.priceEvidence.fxRate?<p className="helperText">USD conversion: {card.priceEvidence.fxRate.toFixed(4)} CAD per USD · rate dated {card.priceEvidence.fxDate}</p>:null}{card.priceEvidence.sales.length?<details><summary>View supporting sales</summary><ul>{card.priceEvidence.sales.map((sale,index)=><li key={index}>{sale.currency} ${sale.amount.toFixed(2)} · {sale.context}</li>)}</ul><p className="helperText">Selected by the collector; not independently verified by ShadowFox.</p></details>:null}</section>:hasEstimate?<p className="helperText">No review date or supporting sales saved for this estimate.</p>:null}
+            {!editing?<AutomaticSoldPrices key={duplicateKey(card)} cardId={card.id}/>:null}
             <div className="buttonRow"><Link className="btn ghost" href={`/transactions?card=${card.id}`}>Record purchase or sale</Link><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
           </section>
         </div>

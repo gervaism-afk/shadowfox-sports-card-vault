@@ -81,6 +81,7 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
     }
     return route.fulfill({ status: 500, headers, json: { message: `Unexpected fixture request ${url.pathname}` } });
   });
+  await page.route('**/api/pricing/sold?*',route=>route.fulfill({json:{status:'complete',matchedCount:0,estimateCad:null,items:[],message:'No confidently matching sales found.'}}));
   return { rows, calls, binders, memberships, wants, transactions,checklists };
 }
 async function cardImage(page: Page, player = 'CONNOR MCDAVID', year = '2023', brand = 'Upper Deck', number = '201') {
@@ -679,4 +680,11 @@ test('bulk edits respect filters, preview explicit clears and add selected cards
  await page.getByLabel('Search your collection').fill('Other');
  await expect(page.locator('.bulkPanel')).toContainText('0 selected');
  await expect(page.getByRole('button',{name:'Review bulk changes',exact:true})).toBeDisabled();
+});
+
+
+test('automatic sold prices load on a saved card without changing its estimate',async({page})=>{
+ const card=row({player:'Automatic Pricing',estimated_value_cad:20});const backend=await fixture(page,[card]);
+ await page.route('**/api/pricing/sold?*',route=>route.fulfill({json:{status:'complete',matchedCount:2,estimateCad:3.5,checkedAt:new Date().toISOString(),message:'Prices exclude shipping.',items:[{title:'Matching card',url:'https://www.ebay.ca/itm/123',amount:3,currency:'CAD',soldAt:'2026-10-01',excludedReason:null},{title:'Different parallel',url:'https://www.ebay.ca/itm/124',amount:40,currency:'CAD',soldAt:'2026-10-01',excludedReason:'Different parallel or subset'}]}}));
+ await page.goto(`/card/${card.id}`);const panel=page.getByRole('region',{name:'Automatic sold prices'});await expect(panel).toContainText('$3.50 CAD');await panel.getByText('View sold listings and excluded matches',{exact:true}).click();await expect(panel).toContainText('Excluded: Different parallel');expect(backend.rows[0].estimated_value_cad).toBe(20);await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
