@@ -364,7 +364,10 @@ test('photos wait for one combined identification and stopped scans cannot overw
   await page.goto('/scan');
   await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
   await expect(page.getByText('Front photo ready.', { exact: false })).toBeVisible();
-  await page.getByLabel('Upload back image').setInputFiles(await cardImage(page));
+  const frontBefore = await page.getByRole('img', { name: 'Front preview' }).getAttribute('src');
+  await expect(page.getByLabel('Take back card photo')).toHaveAttribute('capture', 'environment');
+  await page.getByLabel('Take back card photo').setInputFiles(await cardImage(page));
+  await expect(page.getByRole('img', { name: 'Front preview' })).toHaveAttribute('src', frontBefore!);
   await expect(page.getByText('Back photo ready.', { exact: false })).toBeVisible();
   expect(calls).toBe(0);
   const requested = page.waitForRequest('**/api/identify');

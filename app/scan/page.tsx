@@ -147,8 +147,9 @@ export default function ScanPage() {
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
           <div className="buttonRow" style={{ marginTop: 18 }}>
             <label className="btn primary">Upload Front<input aria-label="Upload front image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
-            <label className="btn ghost">Use Camera<input aria-label="Take card photo" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
-            <label className="btn ghost">Add Back Image<input aria-label="Upload back image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
+            <label className="btn ghost">Take Front Photo<input aria-label="Take card photo" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
+            <label className="btn ghost">Take Back Photo<input aria-label="Take back card photo" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
+            <label className="btn ghost">Upload Back<input aria-label="Upload back image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
             <button type="button" className="btn ghost" disabled={!card.frontImage} onClick={() => void rescan()}>Identify Card</button>
           </div>
         </fieldset>
