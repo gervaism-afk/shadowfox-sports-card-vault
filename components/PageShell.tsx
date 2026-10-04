@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AppHeader, { isVaultRouteActive } from "@/components/AppHeader";
 import { useAuth } from "@/components/AuthProvider";
+import { useCardSize } from "@/lib/preferences/card-size";
 import VaultIcon from "@/components/VaultIcon";
 
 const sidebarLinks = [
@@ -21,9 +22,10 @@ const sidebarLinks = [
 export default function PageShell({ title, children }: { title?: string; children: React.ReactNode }) {
   const { user } = useAuth();
   const pathname = usePathname();
+  const { size } = useCardSize(user?.id);
 
   return (
-    <div className={user ? "vaultAppShell" : "vaultGuestShell"}>
+    <div className={user ? "vaultAppShell" : "vaultGuestShell"} data-card-size={size}>
       <AppHeader />
       <div className="appLayout">
         {user ? <aside className="appSidebar" aria-label="Vault sidebar">

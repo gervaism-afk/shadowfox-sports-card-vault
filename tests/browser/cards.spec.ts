@@ -811,3 +811,22 @@ test('photo cropping saves only the selected card area and cancellation preserve
  await expect(page.getByRole('img',{name:'Back Image',exact:true})).toBeVisible();await page.getByLabel('Player',{exact:true}).fill('Manual photo test');await page.getByRole('button',{name:'Save Card',exact:true}).click();
  await expect(page).toHaveURL(/\/collection$/);expect(backend.rows[0].back_image_url).toContain('/storage/v1/object/public/card-images/');expect(backend.rows[0].front_image_url).toBe('');
 });
+
+test('settings change actual card sizes, remember the choice, and apply across galleries on desktop and mobile',async({page})=>{
+ const cards=Array.from({length:6},(_,i)=>row({player:`Display card ${i+1}`}));const backend=await fixture(page,cards);
+ const binder=randomUUID();backend.binders.push({id:binder,user_id:userId,name:'Size test binder'});for(const card of cards)backend.memberships.push({binder_id:binder,card_id:card.id,user_id:userId});
+ await page.setViewportSize({width:1568,height:1000});const widths:number[]=[];
+ for(const size of ['Small','Medium','Large','Extra Large']){
+  await page.goto('/account');await page.getByRole('radio',{name:size,exact:true}).check();await expect(page.getByRole('radio',{name:size,exact:true})).toBeChecked();
+  await page.goto('/collection');await expect(page.locator('.vaultCollectionCard')).toHaveCount(6);widths.push((await page.locator('.vaultCardWell').first().boundingBox())!.width);
+ }
+ for(let i=1;i<widths.length;i++)expect(widths[i]).toBeGreaterThan(widths[i-1]);
+ await page.reload();await expect(page.locator('[data-card-size]')).toHaveAttribute('data-card-size','extra-large');
+ await page.goto('/binders');await expect(page.locator('.vaultCollectionCard')).toHaveCount(6);await expect(page.locator('[data-card-size]')).toHaveAttribute('data-card-size','extra-large');
+ await page.goto('/');await expect(page.locator('.vaultCollectionCard').first()).toBeVisible();await expect(page.locator('[data-card-size]')).toHaveAttribute('data-card-size','extra-large');
+ await page.setViewportSize({width:390,height:844});await page.goto('/account');await expect(page.getByRole('radio',{name:'Extra Large',exact:true})).toBeChecked();await page.screenshot({path:'/workspace/shadowfox-card-display-settings-mobile.png',fullPage:true});
+ for(const size of ['Small','Medium','Large','Extra Large']){
+  await page.goto('/account');await page.getByRole('radio',{name:size,exact:true}).check();await page.goto('/collection');await expect(page.locator('.vaultCollectionCard')).toHaveCount(6);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }
+ await page.evaluate(({userId})=>{localStorage.setItem(`shadowfox-card-size:${userId}`,'unexpected');localStorage.setItem('shadowfox-card-size:another-user','small');},{userId});await page.reload();await expect(page.locator('[data-card-size]')).toHaveAttribute('data-card-size','medium');
+});

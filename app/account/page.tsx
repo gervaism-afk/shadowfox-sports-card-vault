@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import AuthGate from "@/components/AuthGate";
 import PageShell from "@/components/PageShell";
+import CardDisplaySettings from "@/components/CardDisplaySettings";
 import PasswordInput from "@/components/PasswordInput";
 import { supabase } from "@/lib/supabase";
 
@@ -66,6 +67,7 @@ export default function AccountPage() {
     else router.replace("/login");
   }
   return <AuthGate><PageShell title="Account settings"><div className="accountSettings">
+    <CardDisplaySettings/>
     <section className="panel"><h2>Your profile</h2><p className="helperText">Your email: {user?.email}</p>
       <form className="authForm" onSubmit={e => { e.preventDefault(); void saveName(); }}>
         <label className="label" htmlFor={`${id}-name`}>Display name</label>
