@@ -18,7 +18,7 @@ import { duplicateKey, ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
 
 export default function ScanPage() {
   const [card, setCard] = useState<CardRecord>(emptyCard);
-  const [status, setStatus] = useState("Upload the front and back, then select Identify Card.");
+  const [status, setStatus] = useState("Add a front photo to get started.");
   const [reviewFields,setReviewFields]=useState<ReviewField[]>([]);
   const [aiWarnings, setAiWarnings] = useState<string[]>([]);
   const [ocrText, setOcrText] = useState("");
@@ -76,7 +76,7 @@ export default function ScanPage() {
       }
     } catch (error: any) {
       if (!task.signal.aborted) setStatus(/chunk|Loading.*failed/i.test(error.message) ? "The app was updated while this page was open. Refresh this page and upload your photos again, or enter the details below." : error.message);
-    } finally { if (controller.current === task) { running.current = false; setBusy(false); setScanning(false); } }
+    } finally { if (controller.current === task) { running.current = false; setBusy(false); setScanning(false); if (!task.signal.aborted) document.getElementById("card-details")?.scrollIntoView({behavior:"smooth",block:"start"}); } }
   }
 
   function cancelScan() {
@@ -131,47 +131,43 @@ export default function ScanPage() {
   }
 
   return <AuthGate><PageShell>
-    <section className="workflowPageHeader">
-      <div><div className="vaultEyebrow">Capture your collection</div><h1 className="workflowTitle">A new card. <em>A new story.</em></h1><p className="workflowIntro">Add a photo, review the details, and make it part of your vault.</p></div>
-      <div className="buttonRow"><button className="btn ghost" onClick={() => router.push("/manual")}>Add Manually</button><button className="btn ghost" onClick={() => router.push("/collection")}>View Collection</button></div>
-    </section>
-    <ol className="workflowSteps" aria-label="Add a card steps">
-      <li className={card.frontImage ? "isComplete" : "isActive"}><span>01</span> Add photos</li>
-      <li className={card.frontImage ? "isActive" : ""}><span>02</span> Review details</li>
-      <li><span>03</span> Save to vault</li>
-    </ol>
-    <div className="workflowLayout">
-      <section className="panel workflowPanel">
-        <div className="workflowPanelHeading"><h2>Start with a clear photo</h2><span className="helperText">JPG, PNG or WebP</span></div>
-        <p className="helperText">Add front and back photos first, then identify them together in one scan. A new front photo starts a new card.</p>
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
-          <div className="buttonRow" style={{ marginTop: 18 }}>
-            <label className="btn primary">Upload Front<input aria-label="Upload front image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
-            <label className="btn ghost">Take Front Photo<input aria-label="Take card photo" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file); }} /></label>
-            <label className="btn ghost">Take Back Photo<input aria-label="Take back card photo" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
-            <label className="btn ghost">Upload Back<input aria-label="Upload back image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, true); }} /></label>
-            <button type="button" className="btn ghost" disabled={!card.frontImage} onClick={() => void rescan()}>Identify Card</button>
+    <div className="addCardExperience">
+    <header className="addCardHeader"><div><div className="vaultEyebrow">YOUR VAULT, ONE CARD AT A TIME</div><h1>Add a card</h1><p>Snap it. Check the details. Make it yours.</p></div><a className="addCardExit" href="/collection">Close <span aria-hidden="true">×</span></a></header>
+    <nav className="addCardModes" aria-label="How to add a card"><span aria-current="page">Scan a card</span><a href="/manual">Enter manually</a></nav>
+    <ol className="addCardProgress" aria-label="Add a card steps"><li className={card.frontImage ? "done" : "active"}><a href="#card-photos"><span>1</span> Photos</a></li><li className={card.frontImage ? "active" : ""}><a href={card.frontImage ? "#card-details" : "/manual"}><span>2</span> Details</a></li><li><a href={card.frontImage ? "#card-save" : "/manual"}><span>3</span> Save</a></li></ol>
+    <div className={`addCardLayout ${card.frontImage ? "hasDetails" : "photosOnly"}`}>
+      <section className="addCardPhotoPanel" id="card-photos" aria-label="Card photos">
+        <div className="addCardSectionHeading"><h2>Start with your card</h2><span>Front required · back optional</span></div>
+        <fieldset disabled={busy} className="addCardPhotoFields">
+          <div className="addCardPhotoTiles">
+          {([false,true] as const).map(back => <div className={`addCardPhotoTile ${(back ? card.backImage : card.frontImage) ? "hasPhoto" : ""}`} key={String(back)}>
+            <div className="addCardPhotoLabel"><strong>{back ? "Back" : "Front"}</strong><span>{(back ? card.backImage : card.frontImage) ? "✓ Added" : back ? "Extra detail" : "Start here"}</span></div>
+            <div className="addCardPhotoVisual">{(back ? card.backImage : card.frontImage) ? <img src={back ? card.backImage : card.frontImage} alt={back ? "Back preview" : "Front preview"}/> : <div className="addCardPhotoEmpty"><span aria-hidden="true">＋</span><p>{back ? "Number & set details" : "Player & card design"}</p></div>}</div>
+            <label className="btn primary">{back ? "Take Back Photo" : "Take Front Photo"}<input aria-label={back ? "Take back card photo" : "Take card photo"} className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event=>{const file=event.target.files?.[0];event.target.value="";if(file)void upload(file,back);}}/></label>
+            <label className="addCardUpload">Choose from photos<input aria-label={back ? "Upload back image" : "Upload front image"} className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>{const file=event.target.files?.[0];event.target.value="";if(file)void upload(file,back);}}/></label>
+          </div>)}
           </div>
+          <button type="button" className="btn primary addCardIdentify" disabled={!card.frontImage} onClick={()=>void rescan()}>Identify Card <span aria-hidden="true">↗</span></button>
         </fieldset>
-        <p className="workflowNotice" role="status" aria-live="polite">{status}{scanning ? ` (${elapsed}s)` : ""}</p>
+        <p className="addCardPhotoHint">AI fills in the details. You stay in control.</p>
+        <p className={`addCardStatus ${scanning ? "isWorking" : ""}`} role="status" aria-live="polite">{status}{scanning ? ` (${elapsed}s)` : ""}</p>
         {scanning ? <button type="button" className="btn ghost" onClick={cancelScan}>Stop identification</button> : null}
-        <div className="workflowPhotoGrid">
-          <figure className="workflowPhoto"><div className="workflowPhotoVisual">{card.frontImage ? <img src={card.frontImage} alt="Front preview" /> : <span>Your card front<br /><small>Upload a photo to begin</small></span>}</div><figcaption>Front <span>Required for identification</span></figcaption></figure>
-          <figure className="workflowPhoto"><div className="workflowPhotoVisual">{card.backImage ? <img src={card.backImage} alt="Back preview" /> : <span>Your card back<br /><small>More detail, a better match</small></span>}</div><figcaption>Back <span>Optional</span></figcaption></figure>
-        </div>
-        <details className="workflowEvidence"><summary>Tips for a better scan</summary><p className="helperText">Use even light, keep the full card in view, and avoid glare. Leave the card number and player name readable. You can correct every field before saving.</p></details>
+        <details className="addCardHelp"><summary>Photo tips</summary><p>Keep the whole card in view, use even light, and avoid glare. Add the back before identifying to help read the card number and set.</p></details>
       </section>
-      <section className="panel workflowPanel">
-        <div className="workflowPanelHeading"><h2>Make the details yours</h2><span className="helperText">All fields are editable</span></div>
+      {card.frontImage ? <section className="addCardDetailsPanel" id="card-details">
+        <div className="workflowPanelHeading"><h2>Your card details</h2><span className="helperText">All fields are editable</span></div>
+        {card.player ? <div className="addCardMatch">{card.frontImage ? <img src={card.frontImage} alt=""/> : null}<div><span>Review your card</span><strong>{card.player}</strong><p>{[card.year,card.brand,card.set,card.cardNumber ? `#${card.cardNumber}` : ""].filter(Boolean).join(" · ")}</p></div></div> : null}
         {aiWarnings.length ? <div className="workflowNotice"><strong>Before you save</strong><ul>{aiWarnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div> : null}
         <p className="helperText">Check the player, card number, parallel and grade against your photos.</p>
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={(next) => { setReviewFields(rows=>rows.filter(row=>next[row.field]===card[row.field])); setCard(next); setDuplicate(null); }} showImageFields={false} reviewFields={reviewFields} onReview={field=>setReviewFields(rows=>rows.filter(row=>row.field!==field))} /></fieldset>
-        <details className="workflowEvidence"><summary>View detected text</summary><div className="fieldBlockWide"><label className="label" htmlFor="ocr-text">Detected text</label><textarea id="ocr-text" className="input textarea" value={ocrText} readOnly placeholder="Text detected in your photo appears here." /></div>{confidence !== null ? <p className="helperText">Field completeness: {Math.round(confidence * 100)}% — review the detected details.</p> : null}</details>
-        <div className="buttonRow" style={{ marginTop: 12 }}><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
+        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={(next) => { setReviewFields(rows=>rows.filter(row=>next[row.field]===card[row.field])); setCard(next); setDuplicate(null); }} showImageFields={false} collapsibleExtras reviewFields={reviewFields} onReview={field=>setReviewFields(rows=>rows.filter(row=>row.field!==field))} /></fieldset>
+        <details className="addCardHelp"><summary>View detected text</summary><div className="fieldBlockWide"><label className="label" htmlFor="ocr-text">Detected text</label><textarea id="ocr-text" className="input textarea" value={ocrText} readOnly placeholder="Text detected in your photo appears here." /></div>{confidence !== null ? <p className="helperText">Field completeness: {Math.round(confidence * 100)}% — review the detected details.</p> : null}</details>
+        <details className="addCardHelp"><summary>Pricing & market research · optional</summary>        <div className="buttonRow" style={{ marginTop: 12 }}><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
         <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value,priceEvidence) => setCard((previous) => ({ ...previous, estimatedValueCad: value, priceEvidence }))} />
+</details>
         {duplicate ? <p className="workflowNotice">Matching card: {duplicate.player} {duplicate.year} {duplicate.brand} #{duplicate.cardNumber}.</p> : null}
-        <div className="workflowSaveBar"><span className="helperText">{busy ? "Working on your card…" : "Ready when your details are."}</span><div className="buttonRow"><button className="btn primary" disabled={busy} onClick={() => save()}>{duplicate ? "Save Separately" : "Save Card"}</button>{duplicate ? <button className="btn ghost" disabled={busy} onClick={() => save(true)}>Add to Existing Quantity</button> : null}</div></div>
-      </section>
+        <div className="addCardSaveBar" id="card-save"><span className="helperText">{busy ? "Working on your card…" : "Everything can be edited later."}</span><div className="buttonRow"><button className="btn primary" disabled={busy} onClick={() => save()}>{duplicate ? "Save Separately" : "Save Card"}</button>{duplicate ? <button className="btn ghost" disabled={busy} onClick={() => save(true)}>Add to Existing Quantity</button> : null}</div></div>
+      </section> : null}
+    </div>
     </div>
   </PageShell></AuthGate>;
 }

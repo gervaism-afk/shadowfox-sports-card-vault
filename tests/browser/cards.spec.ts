@@ -122,6 +122,7 @@ test('real local OCR, sold-price estimate, save, and collection navigation', asy
   await expect(page.getByLabel('Year', { exact: true })).toHaveValue('2023');
   await expect(page.getByLabel('Brand', { exact: true })).toHaveValue('Upper Deck');
   await expect(page.getByLabel('Card Number', { exact: true })).toHaveValue('201');
+  if (await page.getByText('Pricing & market research · optional', {exact:true}).count()) await page.getByText('Pricing & market research · optional', {exact:true}).click();
   await page.getByText('Estimate from sold prices', { exact: true }).click();
   await page.getByText('Or enter confirmed CAD prices', { exact: true }).click();
   await page.getByLabel('Sold prices in CAD').fill('20\n30\n25');
@@ -223,6 +224,7 @@ test('130point pasted prices require review, convert USD to CAD, and persist an 
   await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
   await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor McDavid');
+  if (await page.getByText('Pricing & market research · optional', {exact:true}).count()) await page.getByText('Pricing & market research · optional', {exact:true}).click();
   await page.getByText('Estimate from sold prices', { exact: true }).click();
   await expect(page.getByRole('link', { name: 'Open 130point' })).toHaveAttribute('href', 'https://130point.com/sales/');
   await expect(page.getByLabel('Card search text')).toHaveValue(/PSA 9$/);
@@ -573,6 +575,7 @@ test('combined filters constrain CSV, JSON and printable PDF, with explicit all-
 
 test('manual card suggestions cover both sports, keyboard choices and custom corrections',async({page})=>{
   await fixture(page);await page.goto('/manual');
+  await page.getByText('Variation & grading · optional',{exact:true}).click();
   await page.getByLabel('Player',{exact:true}).fill('Nick');await page.getByRole('option',{name:'Nick Suzuki',exact:true}).click();
   await page.getByLabel('Brand',{exact:true}).fill('Upper Deck');await page.getByLabel('Year',{exact:true}).fill('2026');await page.getByLabel('Set',{exact:true}).fill('Series 2');await page.getByRole('option',{name:/^Series 2/}).click();await expect(page.getByLabel('Year',{exact:true})).toHaveValue('2025-26');await page.getByLabel('Subset',{exact:true}).fill('Young');await page.getByRole('option',{name:'Young Guns Common term · verify on your card',exact:true}).click();await page.getByLabel('Parallel',{exact:true}).fill('High');await page.getByRole('option',{name:/^High Gloss/}).click();await expect(page.getByLabel('Parallel',{exact:true})).toHaveValue('High Gloss');await page.getByLabel('Year',{exact:true}).fill('2026-27');await page.getByLabel('Set',{exact:true}).fill('Tim');await page.getByRole('option',{name:'Tim Hortons',exact:false}).click();await expect(page.getByLabel('Set',{exact:true})).toHaveValue('Tim Hortons');
   await page.getByLabel('Team',{exact:true}).fill('Mont');await page.getByLabel('Team',{exact:true}).press('ArrowDown');await page.getByLabel('Team',{exact:true}).press('Enter');await expect(page.getByLabel('Team',{exact:true})).toHaveValue('Montréal Canadiens');
@@ -745,4 +748,29 @@ test('checklist selection has one highlighted list and only saves after review',
 
 test('preferred checklist failure offers a sourced community alternative without inventing cards',async({page})=>{
  const backend=await fixture(page);const primary='https://upperdeck.com/checklist/2026-27-tim-hortons-checklist/',community='https://www.tcdb.com/Checklist.cfm/sid/688992/2026-27-Upper-Deck-Tim-Hortons';await page.route('**/api/catalog?**',route=>route.fulfill({json:{sport:'Hockey',teams:[],players:[],sources:[],sets:[{year:'2026-27',brand:'Upper Deck',set:'Tim Hortons',url:primary,alternateUrls:[community]}]}}));await page.route('**/api/catalog/checklist?**',route=>new URL(route.request().url()).searchParams.get('url')===primary?route.fulfill({status:502,json:{error:'Publisher unavailable.'}}):route.fulfill({json:{sport:'Hockey',year:'2026-27',brand:'Upper Deck',set:'Tim Hortons',url:community,source:'Trading Card Database community checklist',checkedAt:new Date().toISOString(),groups:[{id:'base-complete',label:'Complete published set',subset:'',parallel:'',entries:[{number:'14',player:'Nick Suzuki',team:'Montreal Canadiens'}]}]}}));await page.goto('/sets');await page.getByLabel('Set to track').selectOption(primary);await expect(page.getByText('Publisher unavailable.',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Try community checklist',exact:true}).click();await expect(page.getByRole('checkbox',{name:'Select missing card 14',exact:true})).toBeVisible();expect(backend.checklists[0].source_url).toBe(community);expect(backend.rows).toHaveLength(0);await page.getByLabel('Checklist source').selectOption('community');await page.getByLabel('Set to track').selectOption(community);await expect(page.getByRole('checkbox',{name:'Select missing card 14',exact:true})).toBeVisible();expect(backend.checklists).toHaveLength(1);
+});
+
+test('modern add card keeps both capture sides clear and optional fields tucked away on mobile', async ({page})=>{
+ await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/scan');
+ await expect(page.getByRole('heading',{name:'Add a card',exact:true})).toBeVisible();
+ await expect(page.getByLabel('Take card photo')).toHaveAttribute('capture','environment');
+ await expect(page.getByLabel('Take back card photo')).toHaveAttribute('capture','environment');
+ await expect(page.getByRole('button',{name:'Identify Card',exact:true})).toBeDisabled();
+ await page.screenshot({path:'/workspace/shadowfox-add-card-modern-start-mobile.png',fullPage:true});
+ await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+ await expect(page.getByText('Front photo ready.', {exact:false})).toBeVisible();
+ await expect(page.getByLabel('Parallel',{exact:true})).not.toBeVisible();
+ await page.getByText('Variation & grading · optional',{exact:true}).click();
+ await expect(page.getByLabel('Parallel',{exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.getByText('Variation & grading · optional',{exact:true}).click();
+ await page.screenshot({path:'/workspace/shadowfox-add-card-modern-mobile.png',fullPage:true});
+ await page.setViewportSize({width:1280,height:900});
+ await page.screenshot({path:'/workspace/shadowfox-add-card-modern-desktop.png',fullPage:true});
+ await page.getByRole('link',{name:'Enter manually',exact:true}).click();
+ await expect(page.getByLabel('Player',{exact:true})).toBeVisible();
+ await expect(page.getByLabel('Take back image photo')).toHaveAttribute('capture','environment');
+ await page.getByLabel('Player',{exact:true}).fill('Test Player');
+ await page.getByRole('button',{name:/Save/}).click();
+ await expect(page).toHaveURL(/\/collection$/);
 });
