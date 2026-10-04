@@ -8,6 +8,7 @@ import {
 } from "./checklist-parser";
 import { parseHockeySets, parseBaseballSets } from "./parsers";
 import { parseTcdbChecklist, tcdbGroups, tcdbProduct } from "./tcdb-parser";
+import { savedCommunityChecklist } from "./community-references";
 export function checklistUrl(value: string, sport: string) {
   const url = new URL(value);
   if (
@@ -77,6 +78,7 @@ export const getPublishedChecklist = unstable_cache(
       set = "",
       groups;
     if (url.hostname === "www.tcdb.com") {
+      try {
       const html = await fetchText(url.href), $ = load(html);
       const title = $("title").text().replace(/ (?:Hockey|Baseball) Checklist \| Trading Card Database$/, "").trim();
       if (!$("title").text().includes(`${sport} Checklist | Trading Card Database`)) throw new Error("This checklist does not match the selected sport.");
@@ -96,6 +98,11 @@ export const getPublishedChecklist = unstable_cache(
       }
       if (new Set(entries.map(e => e.number.toUpperCase())).size !== entries.length) throw new Error("Checklist pagination returned duplicate card numbers.");
       groups = tcdbGroups(entries);
+      } catch (error) {
+        const reference = savedCommunityChecklist(url.href, sport);
+        if (reference) return reference;
+        throw error;
+      }
     } else if (sport === "Hockey") {
       const html = await fetchText(url.href);
       const $ = load(html);
@@ -148,6 +155,6 @@ export const getPublishedChecklist = unstable_cache(
       groups,
     };
   },
-  ["published-card-checklist-v4"],
+  ["published-card-checklist-v5"],
   { revalidate: 6 * 60 * 60, tags: ["card-catalog"] },
 );

@@ -49,5 +49,13 @@ export function parseTcdbChecklist(html: string, sid: string) {
   return { entries: [...entries.values()], pages: Math.max(1, ...pages) };
 }
 export function tcdbGroups(entries: ChecklistEntry[]): PublishedGroup[] {
-  return entries.length ? [{ id: "base-complete", label: "Complete published set", subset: "", parallel: "", entries }] : [];
+  const numbers = new Set(entries.map(entry => entry.number.toUpperCase()));
+  // TCDB appends a/b/c to distinguish alternate images of the same printed number.
+  // Their actual parallel identity is not available in this table: do not import
+  // them as extra base cards or invent a variant name.
+  const base = entries.filter(entry => {
+    const alternate = /^(\d+)[a-z]+$/i.exec(entry.number);
+    return !alternate || !numbers.has(alternate[1]);
+  });
+  return base.length ? [{ id: "base-complete", label: "Complete published set", subset: "", parallel: "", entries: base }] : [];
 }
