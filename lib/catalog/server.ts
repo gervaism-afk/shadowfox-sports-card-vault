@@ -13,6 +13,7 @@ import {
 import saved from "@/data/card-catalog.json";
 import { matchesCatalogYear } from "./types";
 import { dedupeSets } from "./parsers";
+import { parseTcdbSets } from "./tcdb-parser";
 const HOURS = 6 * 60 * 60;
 const urls = {
   nhlTeams: "https://api.nhle.com/stats/rest/en/team",
@@ -74,7 +75,7 @@ const league = unstable_cache(
   ["card-catalog-league-v1"],
   { revalidate: HOURS, tags: ["card-catalog"] },
 );
-const sets = unstable_cache(
+const primarySets = unstable_cache(
   async (sport: Sport, year: string) => {
     const current = new Date().getUTCFullYear();
     const url =
@@ -103,17 +104,28 @@ const sets = unstable_cache(
   ["card-catalog-sets-v3"],
   { revalidate: HOURS, tags: ["card-catalog"] },
 );
+const communitySets = unstable_cache(async (sport: Sport, year: string) => {
+  const start = /^\d{4}/.exec(year)?.[0] || String(new Date().getUTCFullYear());
+  const response = await fetch(`https://www.tcdb.com/ViewAll.cfm/sp/${sport}/year/${start}`, { headers: { "User-Agent": "ShadowFox-Cards/1.0 (public checklist reference)" }, signal: AbortSignal.timeout(6000), redirect: "error" });
+  if (!response.ok) throw new Error("Community source unavailable");
+  const html = await response.text();
+  if (html.length > 4 * 1024 * 1024) throw new Error("Community index is too large");
+  const sets = parseTcdbSets(html).filter(row => matchesCatalogYear(row.year, year, sport));
+  if (!sets.length) throw new Error("No community sets found");
+  return { sets, checkedAt: new Date().toISOString() };
+}, ["tcdb-set-index-v1"], { revalidate: 86400, tags: ["card-catalog"] });
 export async function getCardCatalog(
   sport: Sport,
   year: string,
   setsOnly = false,
 ): Promise<CardCatalog> {
   const fallback = saved[sport];
-  const [people, products] = await Promise.allSettled([
+  const [people, products, community] = await Promise.allSettled([
     setsOnly
       ? Promise.resolve({ teams: [], players: [], checkedAt: saved.checkedAt })
       : league(sport),
-    sets(sport, year),
+    primarySets(sport, year),
+    communitySets(sport, year),
   ]);
   const sources: CatalogSource[] = [];
   if (!setsOnly)
@@ -145,17 +157,18 @@ export async function getCardCatalog(
         : saved.checkedAt,
     status: products.status === "fulfilled" ? "live" : "saved",
   });
+  sources.push({ name: "Trading Card Database set checklists", url: "https://www.tcdb.com/", checkedAt: community.status === "fulfilled" ? community.value.checkedAt : new Date().toISOString(), status: community.status === "fulfilled" ? "live" : "saved", note: community.status === "fulfilled" ? "Community reference supplements published coverage; duplicate sets prefer the primary source." : "Community source unavailable; primary and saved references remain available." });
   return {
     sport,
     teams: people.status === "fulfilled" ? people.value.teams : fallback.teams,
     players:
       people.status === "fulfilled" ? people.value.players : fallback.players,
-    sets:
+    sets: dedupeSets([...(community.status === "fulfilled" ? community.value.sets : []), ...(
       products.status === "fulfilled"
         ? products.value.sets
         : fallback.sets.filter((row) =>
             matchesCatalogYear(row.year, year, sport),
-          ),
+          ))]),
     sources,
   };
 }

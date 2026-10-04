@@ -1,5 +1,5 @@
 import type { Sport } from '../types';
-export type CatalogSet = { year: string; brand: string; set: string; url: string };
+export type CatalogSet = { year: string; brand: string; set: string; url: string; alternateUrls?: string[] };
 export type CatalogPlayer = { name: string; team: string };
 export type CatalogSource = { name: string; url: string; checkedAt: string; status: 'live'|'saved'; note?: string };
 export type CardCatalog = { sport: Sport; teams: string[]; players: CatalogPlayer[]; sets: CatalogSet[]; sources: CatalogSource[] };

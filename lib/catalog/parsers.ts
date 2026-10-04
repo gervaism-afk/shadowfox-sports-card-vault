@@ -37,7 +37,15 @@ export function parseBaseballSets(value:unknown):CatalogSet[] {
   }
   return dedupeSets(result);
 }
-export function dedupeSets(rows:CatalogSet[]) { return [...new Map(rows.map(row=>[[row.year,row.brand,row.set].join('|').toLowerCase(),row])).values()].sort((a,b)=>b.year.localeCompare(a.year)||a.brand.localeCompare(b.brand)||a.set.localeCompare(b.set)); }
+export function dedupeSets(rows:CatalogSet[]) {
+  const products = new Map<string, CatalogSet>();
+  for (const row of rows) {
+    const key = [row.year,row.brand,row.set].join('|').toLowerCase(), previous = products.get(key);
+    const alternateUrls = [...new Set([...(previous?.alternateUrls || []), ...(row.alternateUrls || []), ...(previous ? [previous.url] : [])])].filter(url => url !== row.url);
+    products.set(key, { ...row, ...(alternateUrls.length ? { alternateUrls } : {}) });
+  }
+  return [...products.values()].sort((a,b)=>b.year.localeCompare(a.year)||a.brand.localeCompare(b.brand)||a.set.localeCompare(b.set));
+}
 export function parseNhlTeams(value:unknown) { return optionValues(items(record(value).data).map(row=>text(record(row).fullName)).filter(name=>name&&name!=='To be determined')); }
 export function parseMlbTeams(value:unknown) { return optionValues(items(record(value).teams).map(row=>text(record(row).name)).filter(Boolean)); }
 export function parseNhlPlayers(value:unknown,teams:unknown):CatalogPlayer[] {

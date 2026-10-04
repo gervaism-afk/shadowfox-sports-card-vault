@@ -88,14 +88,11 @@ export default function CardDetailPage() {
           {!editing ? <button className="btn primary" aria-expanded={false} aria-controls="card-edit-panel" onClick={() => { setEditing(true); setStatus(""); }}>Edit card</button> : <span className="helperText">Editing card details</span>}
         </section>
 
-        <div className="detailLayout">
+        {!editing ? <div className="detailLayout">
           <section className="panel workflowPanel">
             <div className="detailImageStage">{image ? <img src={image} alt={`${side === "front" ? "Front" : "Back"} of ${card.player || "card"}`} /> : <span>No {side} image added</span>}</div>
             <div className="detailImageSwitch" aria-label="Card photos"><button className={side === "front" ? "isActive" : ""} aria-pressed={side === "front"} onClick={() => setSide("front")}>Front</button><button className={side === "back" ? "isActive" : ""} aria-pressed={side === "back"} onClick={() => setSide("back")}>Back</button></div>
-            {editing ? <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><div className="buttonRow" style={{ marginTop: 20 }}>
-              <label className="btn ghost">Replace Front Image<input aria-label="Replace front image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void replacePhoto(file, "front"); }} /></label>
-              <label className="btn ghost">Replace Back Image<input aria-label="Replace back image" className="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void replacePhoto(file, "back"); }} /></label>
-            </div><p className="helperText">Photo changes are kept when you save.</p></fieldset> : null}
+
           </section>
 
           <section className="panel workflowPanel">
@@ -113,12 +110,20 @@ export default function CardDetailPage() {
             {!editing?<AutomaticSoldPrices key={duplicateKey(card)} cardId={card.id}/>:null}
             <div className="buttonRow"><Link className="btn ghost" href={`/transactions?card=${card.id}`}>Record purchase or sale</Link><a className="btn ghost" href={ebayActiveUrl(card)} target="_blank" rel="noreferrer">View Active Listings</a><a className="btn ghost" href={ebaySoldUrl(card)} target="_blank" rel="noreferrer">View Sold Listings</a></div>
           </section>
-        </div>
+        </div> : null}
 
         {status ? <p className="workflowNotice" role="status">{status}</p> : null}
         {editing ? <section id="card-edit-panel" className="panel workflowPanel detailEditPanel">
           <div className="workflowPanelHeading"><h2 ref={editHeading} tabIndex={-1}>Edit your card</h2><span className="helperText">Review, then save your changes</span></div>
-          <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={setCard} showImageFields={false} /></fieldset>
+          <fieldset className="cardPhotoEditor" disabled={busy}>
+            <legend>Card photos</legend>
+            <p className="helperText">Take a new photo or choose one from your device. Save Changes keeps your edits; Cancel restores the saved card.</p>
+            <div className="photoEditorGrid">{(["front", "back"] as const).map(photoSide => {
+              const key = photoSide === "front" ? "frontImage" : "backImage";
+              return <section className="photoEditorSide" key={photoSide}><h3>{photoSide === "front" ? "Front" : "Back"}</h3><div className="photoEditorPreview">{card[key] ? <img src={card[key]} alt={`${photoSide} preview of ${card.player}`}/> : <span>No {photoSide} photo</span>}</div><div className="buttonRow"><label className="btn primary">Take photo<input className="uploadInput" aria-label={`Take ${photoSide} photo`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void replacePhoto(file, photoSide); }}/></label><label className="btn ghost">Upload<input className="uploadInput" aria-label={`Replace ${photoSide} image`} type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void replacePhoto(file, photoSide); }}/></label>{card[key] ? <button className="btn ghost" onClick={() => setCard(previous => previous ? {...previous, [key]: ""} : previous)}>Remove {photoSide} photo</button> : null}</div></section>;
+            })}</div>
+          </fieldset>
+          <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={setCard} showImageFields={false} collapsibleExtras /></fieldset>
           <SoldPriceEstimator key={duplicateKey(card)} card={card} disabled={busy} onApply={(value,priceEvidence) => setCard((previous) => previous ? { ...previous, estimatedValueCad: value, priceEvidence } : previous)} />
           <div className="workflowSaveBar"><span className="helperText">Changes stay on this page until you save.</span><div className="buttonRow">
             <button className="btn ghost" disabled={busy} onClick={() => { setCard(savedCard); setEditing(false); setStatus(""); }}>Cancel</button>
@@ -132,6 +137,7 @@ export default function CardDetailPage() {
             }}>Save Changes</button>
           </div></div>
           <div className="detailDangerZone"><div><h3>Remove this card</h3><p className="helperText">Delete this card and its saved details from your vault.</p></div><button className="btn danger" disabled={busy} onClick={async () => {
+            if (!window.confirm("Delete this card from your collection?")) return;
             try { setBusy(true); await deleteCard(card.id); router.push("/collection"); }
             catch (e: any) { setStatus(e.message || "Failed to delete"); }
             finally { setBusy(false); }

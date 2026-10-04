@@ -6,7 +6,7 @@ import PageShell from "@/components/PageShell";
 import CollectionPdfExport from "@/components/CollectionPdfExport";
 import ChecklistBulkAdd from "@/components/ChecklistBulkAdd";
 import { useAuth } from "@/components/AuthProvider";
-import { loadCards, saveCard } from "@/lib/storage";
+import { loadCards } from "@/lib/storage";
 import {
   loadChecklists,
   saveChecklist,
@@ -16,8 +16,6 @@ import {
   completion,
   parseChecklist,
   productKey,
-  matchingChecklistCards,
-  type ChecklistEntry,
   type SetChecklist,
 } from "@/lib/set-completion";
 import { useCardCatalog } from "@/lib/catalog/client";
@@ -42,6 +40,7 @@ export default function SetsPage() {
   const { user } = useAuth();
   const userRef = useRef(user?.id);
   userRef.current = user?.id;
+  const [chosenNumbers, setChosenNumbers] = useState<string[]>([]);
   const [cards, setCards] = useState<CardRecord[]>([]),
     [lists, setLists] = useState<SetChecklist[]>([]),
     [selected, setSelected] = useState(""),
@@ -84,6 +83,8 @@ export default function SetsPage() {
       active = false;
     };
   }, [user?.id]);
+  useEffect(() => { setChosenNumbers([]); }, [selected, user?.id]);
+  function toggleCard(number: string) { setChosenNumbers(values => values.includes(number) ? values.filter(value => value !== number) : [...values, number]); }
   const [browseSport, setBrowseSport] = useState<Sport>("Hockey"),
     [browseYear, setBrowseYear] = useState(
       `${new Date().getUTCFullYear()}-${String(new Date().getUTCFullYear() + 1).slice(-2)}`,
@@ -107,7 +108,13 @@ export default function SetsPage() {
     setSourceLoading(false);
     setSourceError("");
   }, [user?.id]);
-  const availableSets = (catalog?.sets || []).filter(
+  const [browseSource, setBrowseSource] = useState("recommended");
+  const sourceSets = (catalog?.sets || []).flatMap(product => {
+    if (browseSource === "recommended") return [product];
+    const url = [product.url, ...(product.alternateUrls || [])].find(url => url.startsWith("https://www.tcdb.com/"));
+    return url ? [{ ...product, url }] : [];
+  });
+  const availableSets = sourceSets.filter(
     (p) =>
       normalizeOption(p.brand) === normalizeOption(browseBrand) &&
       normalizeOption(p.year) === normalizeOption(browseYear),
@@ -395,46 +402,6 @@ export default function SetsPage() {
       if (uid === userRef.current) setBusy(false);
     }
   }
-  async function markOwned(entry: ChecklistEntry) {
-    if (busy || !list) return;
-    const uid = userRef.current;
-    setBusy(true);
-    setStatus(`Adding card #${entry.number} to your collection…`);
-    try {
-      const latest = await loadCards();
-      let next = latest;
-      if (uid !== userRef.current) return;
-      if (!matchingChecklistCards(latest, list, entry).length) {
-        const card = {
-          ...emptyCard(),
-          sport: list.sport,
-          year: list.year,
-          brand: list.brand,
-          set: list.set_name,
-          subset: entry.subset ?? list.subset,
-          parallel: entry.parallel ?? list.parallel,
-          cardNumber: entry.number,
-          player: entry.player || `Card #${entry.number}`,
-          team: entry.team,
-          rookie: entry.rookie ?? false,
-          autograph: entry.autograph ?? false,
-          relicPatch: entry.relicPatch ?? false,
-          quantity: 1,
-          notes: "Added from set checklist.",
-        };
-        const saved = await saveCard(card);
-        next = [saved, ...latest];
-      }
-      if (uid !== userRef.current) return;
-      setCards(next);
-      setStatus(`Card #${entry.number} is owned in your collection.`);
-    } catch (e: any) {
-      if (uid === userRef.current)
-        setStatus(e.message || "Could not add this card.");
-    } finally {
-      if (uid === userRef.current) setBusy(false);
-    }
-  }
   return (
     <AuthGate>
       <PageShell title="Set completion">
@@ -451,13 +418,13 @@ export default function SetsPage() {
           </Link>
         </div>
         <section className="panel">
-          <h2>Choose your set</h2>
+          <div className="vaultEyebrow">1 · Choose a release</div><h2>Find a checklist</h2>
           <p className="helperText">
             Select a set to pull its published card checklist. Checkmarks
-            reflect cards anywhere in your collection, including binders. Tick a
-            missing card to add one copy to your collection.
+            reflect cards anywhere in your collection, including binders. Select missing cards below, then add them together.
           </p>
           <div className="formGrid">
+            <label className="fieldBlockWide">Checklist source<select className="input" aria-label="Checklist source" disabled={busy || sourceLoading} value={browseSource} onChange={event => { importRun.current++; setBrowseSource(event.target.value); setBrowseSet(""); setPublished(null); setSourceError(""); }}><option value="recommended">Recommended sources</option><option value="community">Trading Card Database · community checklists</option></select></label>
             <label>
               Sport
               <select
@@ -518,7 +485,7 @@ export default function SetsPage() {
                 </option>
                 {availableSets.map((p) => (
                   <option value={p.url} key={p.url}>
-                    {p.set}
+                    {p.set}{p.url.includes("tcdb.com") ? " · TCDB" : ""}
                   </option>
                 ))}
               </select>
@@ -564,9 +531,9 @@ export default function SetsPage() {
               {sourceError}
             </p>
           ) : null}
+          {sourceError && (catalog?.sets || []).find(p => p.url === browseSet)?.alternateUrls?.some(url => url.startsWith("https://www.tcdb.com/")) ? <button className="btn ghost" disabled={busy || sourceLoading} onClick={() => { const product = catalog!.sets.find(p => p.url === browseSet)!; const url = product.alternateUrls!.find(url => url.startsWith("https://www.tcdb.com/"))!; void loadPublished({ ...product, url }); }}>Try community checklist</button> : null}
           <p className="helperText">
-            Source coverage varies by release. The app loads published card
-            numbers and names; it does not invent missing checklists.
+            Sources: Upper Deck, BaseballCardPedia and Trading Card Database. Recommended prefers the publisher where available. Switch sources for another published checklist; cards are matched across your whole collection.
           </p>
         </section>
         {status ? (
@@ -575,6 +542,228 @@ export default function SetsPage() {
           </p>
         ) : null}
         {loading ? <p role="status">Loading your sets…</p> : null}
+        {!loading && lists.length ? (
+          <section className="panel">
+            <div className="vaultEyebrow">2 · Track your cards</div><h2>Your set checklist</h2>
+            <label className="label" htmlFor="tracked-set">
+              Tracked checklist
+            </label>
+            <select
+              id="tracked-set"
+              className="input"
+              value={selected}
+              disabled={busy}
+              onChange={(e) => {
+                setSelected(e.target.value);
+                setView("all");
+                setSearch("");
+              }}
+            >
+              {lists.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.title}
+                </option>
+              ))}
+            </select>
+            {list && result ? (
+              <>
+                <p className="helperText">
+                  {[
+                    list.sport,
+                    list.year,
+                    list.brand,
+                    list.set_name,
+                    list.subset || "Base cards",
+                    list.parallel || "Standard version",
+                  ].join(" · ")}{" "}
+                  ·{" "}
+                  {list.source_url ? "Published checklist" : "Custom checklist"}
+                </p>
+                {list.source_url ? (
+                  <p className="helperText">
+                    <a
+                      href={list.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {list.source_name || "Published checklist"}
+                    </a>{" "}
+                    · Checked{" "}
+                    {list.source_checked_at
+                      ? new Date(list.source_checked_at).toLocaleString()
+                      : "previously"}{" "}
+                    · Compared with your entire collection
+                  </p>
+                ) : null}
+                <div className="setProgress">
+                  <div>
+                    <strong>{result.percent}% complete</strong>
+                    <span>
+                      {result.owned.length} of {result.total} card numbers owned
+                    </span>
+                  </div>
+                  <progress
+                    max={result.total}
+                    value={result.owned.length}
+                    aria-label="Set completion progress"
+                  />
+                </div>
+                <div className="setStats">
+                  <div>
+                    <strong>{result.missing.length}</strong>
+                    <span>Missing numbers</span>
+                  </div>
+                  <div>
+                    <strong>{result.owned.length}</strong>
+                    <span>Owned numbers</span>
+                  </div>
+                  <div>
+                    <strong>{result.extraCopies}</strong>
+                    <span>Extra copies</span>
+                  </div>
+                </div>
+                <div className="buttonRow">
+                  <button
+                    className="btn primary"
+                    disabled={busy}
+                    onClick={() => void refreshCollection()}
+                  >
+                    Refresh collection
+                  </button>
+                  <CollectionPdfExport
+                    cards={missingCards}
+                    filtered={missingCards}
+                    disabled={busy || editing || !missingCards.length}
+                    kind="wanted"
+                    title={`${list.title} · ${list.source_url ? "Published checklist" : "Custom checklist"}`}
+                    filterDescription={list.title}
+                  />
+                </div>
+                <details className="checklistTools"><summary>Checklist tools</summary><div className="buttonRow">                  <button
+                    className="btn ghost"
+                    disabled={busy}
+                    onClick={() => begin(list)}
+                  >
+                    Edit checklist
+                  </button>
+                  <button
+                    className="btn ghost"
+                    disabled={busy}
+                    onClick={() => void remove()}
+                  >
+                    Delete checklist
+                  </button>
+</div></details>
+                {editing ? (
+                  <p className="workflowNotice">
+                    Finish your checklist edit to add owned cards.{" "}
+                    <button
+                      className="btn ghost"
+                      onClick={() => setEditing(false)}
+                    >
+                      Cancel edit
+                    </button>
+                  </p>
+                ) : null}
+                {!editing && user ? <ChecklistBulkAdd key={`${user.id}:${list.id}`} list={list} cards={cards} userId={user.id} busy={busy} setBusy={setBusy} onCards={setCards} selected={chosenNumbers} setSelected={setChosenNumbers}/> : null}
+                <p className="helperText">
+                  Tick missing cards to select them, then choose Add selected cards. Selected cards are highlighted; they become owned after you confirm adding them. Owned cards show a checkmark and quantity. Print / PDF contains missing cards only.
+                </p>
+                {result.outside.length ? (
+                  <p className="workflowNotice">
+                    {result.outside.length} matching collection entries have a
+                    blank or unlisted card number and are excluded from
+                    progress.
+                  </p>
+                ) : null}
+                <div className="setResultControls">
+                  <label>
+                    Show
+                    <select
+                      className="input"
+                      aria-label="Show"
+                      value={view}
+                      onChange={(e) => setView(e.target.value as typeof view)}
+                    >
+                      <option value="all">All checklist entries</option>
+                      <option value="missing">Missing only</option>
+                      <option value="duplicates">Duplicates only</option>
+                    </select>
+                  </label>
+                  <label>
+                    Search checklist
+                    <input
+                      className="input"
+                      type="search"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </label>
+                </div>
+                {chosenNumbers.length ? <div className="checklistSelectionSummary" role="status"><strong>{chosenNumbers.length} {chosenNumbers.length === 1 ? "card" : "cards"} selected</strong><a className="btn primary" href="#checklist-add-controls">Review selected cards</a><button className="btn ghost" disabled={busy} onClick={() => setChosenNumbers([])}>Clear</button></div> : null}
+                <ul className="setChecklistRows">
+                  {rows.map((e) => (
+                    <li key={e.number} className={chosenNumbers.includes(e.number) && !e.quantity ? "checklistRowSelected" : ""}>
+                      <label className="setOwnership">
+                        <input
+                          type="checkbox"
+                          aria-label={`${e.quantity ? "Owned card" : "Select missing card"} ${e.number}`}
+                          checked={e.quantity > 0 || chosenNumbers.includes(e.number)}
+                          disabled={busy || editing || e.quantity > 0}
+                          onChange={() => toggleCard(e.number)}
+                        />
+                        <span
+                          className={e.quantity ? "setOwned" : chosenNumbers.includes(e.number) ? "setSelected" : "setMissing"}
+                        >
+                          {e.quantity ? "Owned" : chosenNumbers.includes(e.number) ? "Selected" : "Missing"}
+                        </span>
+                      </label>
+                      <div>
+                        <strong>
+                          #{e.number}
+                          {e.player ? ` · ${e.player}` : ""}
+                        </strong>
+                        {e.team ? <small>{e.team}</small> : null}
+                      </div>
+                      <span>
+                        {e.quantity ? `Qty ${e.quantity}` : "Need 1"}
+                        {e.cardIds[0] ? (
+                          <Link
+                            className="setViewCard"
+                            href={`/card/${e.cardIds[0]}`}
+                          >
+                            View card
+                          </Link>
+                        ) : (
+                          <button
+                            className="btn ghost setAddCard"
+                            aria-label={`${chosenNumbers.includes(e.number) ? "Deselect" : "Select"} card ${e.number}`}
+                            aria-pressed={chosenNumbers.includes(e.number)}
+                            disabled={busy || editing}
+                            onClick={() => toggleCard(e.number)}
+                          >
+                            {chosenNumbers.includes(e.number) ? "Selected ✓" : "Select card"}
+                          </button>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {!rows.length ? (
+                  <p className="helperText">No entries match this view.</p>
+                ) : null}
+              </>
+            ) : null}
+          </section>
+        ) : !loading && !editing ? (
+          <section className="panel">
+            <h2>Start tracking a set.</h2>
+            <p>
+              Define the expected card numbers, and your saved cards will show
+              how close you are to finishing.
+            </p>
+          </section>
+        ) : null}
         <details className="panel customChecklist">
           <summary>Advanced: custom checklist</summary>
           <p className="helperText">
@@ -748,228 +937,6 @@ export default function SetsPage() {
             </section>
           ) : null}
         </details>
-        {!loading && lists.length ? (
-          <section className="panel">
-            <label className="label" htmlFor="tracked-set">
-              Tracked checklist
-            </label>
-            <select
-              id="tracked-set"
-              className="input"
-              value={selected}
-              disabled={busy}
-              onChange={(e) => {
-                setSelected(e.target.value);
-                setView("all");
-                setSearch("");
-              }}
-            >
-              {lists.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.title}
-                </option>
-              ))}
-            </select>
-            {list && result ? (
-              <>
-                <p className="helperText">
-                  {[
-                    list.sport,
-                    list.year,
-                    list.brand,
-                    list.set_name,
-                    list.subset || "Blank subset",
-                    list.parallel || "Blank parallel",
-                  ].join(" · ")}{" "}
-                  ·{" "}
-                  {list.source_url ? "Published checklist" : "Custom checklist"}
-                </p>
-                {list.source_url ? (
-                  <p className="helperText">
-                    <a
-                      href={list.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {list.source_name || "Published checklist"}
-                    </a>{" "}
-                    · Checked{" "}
-                    {list.source_checked_at
-                      ? new Date(list.source_checked_at).toLocaleString()
-                      : "previously"}{" "}
-                    · Compared with your entire collection
-                  </p>
-                ) : null}
-                <div className="setProgress">
-                  <div>
-                    <strong>{result.percent}% complete</strong>
-                    <span>
-                      {result.owned.length} of {result.total} card numbers owned
-                    </span>
-                  </div>
-                  <progress
-                    max={result.total}
-                    value={result.owned.length}
-                    aria-label="Set completion progress"
-                  />
-                </div>
-                <div className="setStats">
-                  <div>
-                    <strong>{result.missing.length}</strong>
-                    <span>Missing numbers</span>
-                  </div>
-                  <div>
-                    <strong>{result.duplicates.length}</strong>
-                    <span>Numbers with duplicates</span>
-                  </div>
-                  <div>
-                    <strong>{result.extraCopies}</strong>
-                    <span>Extra copies</span>
-                  </div>
-                </div>
-                <div className="buttonRow">
-                  <button
-                    className="btn primary"
-                    disabled={busy}
-                    onClick={() => void refreshCollection()}
-                  >
-                    Refresh collection
-                  </button>
-                  <button
-                    className="btn ghost"
-                    disabled={busy}
-                    onClick={() => begin(list)}
-                  >
-                    Edit checklist
-                  </button>
-                  <button
-                    className="btn ghost"
-                    disabled={busy}
-                    onClick={() => void remove()}
-                  >
-                    Delete checklist
-                  </button>
-                  <CollectionPdfExport
-                    cards={missingCards}
-                    filtered={missingCards}
-                    disabled={busy || editing || !missingCards.length}
-                    kind="wanted"
-                    title={`${list.title} · ${list.source_url ? "Published checklist" : "Custom checklist"}`}
-                    filterDescription={list.title}
-                  />
-                </div>
-                {editing ? (
-                  <p className="workflowNotice">
-                    Finish your checklist edit to add owned cards.{" "}
-                    <button
-                      className="btn ghost"
-                      onClick={() => setEditing(false)}
-                    >
-                      Cancel edit
-                    </button>
-                  </p>
-                ) : null}
-                {!editing && user ? <ChecklistBulkAdd key={`${user.id}:${list.id}`} list={list} cards={cards} userId={user.id} busy={busy} setBusy={setBusy} onCards={setCards}/> : null}
-                <p className="helperText">
-                  Select Add card or tick a missing card to add it to your
-                  collection. Owned cards show a checkmark and quantity; open
-                  their collection entry to change or remove them. Print / PDF
-                  generates only missing cards. It does not add items to your
-                  saved Want list or inventory.
-                </p>
-                {result.outside.length ? (
-                  <p className="workflowNotice">
-                    {result.outside.length} matching collection entries have a
-                    blank or unlisted card number and are excluded from
-                    progress.
-                  </p>
-                ) : null}
-                <div className="setResultControls">
-                  <label>
-                    Show
-                    <select
-                      className="input"
-                      aria-label="Show"
-                      value={view}
-                      onChange={(e) => setView(e.target.value as typeof view)}
-                    >
-                      <option value="all">All checklist entries</option>
-                      <option value="missing">Missing only</option>
-                      <option value="duplicates">Duplicates only</option>
-                    </select>
-                  </label>
-                  <label>
-                    Search checklist
-                    <input
-                      className="input"
-                      type="search"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                  </label>
-                </div>
-                <ul className="setChecklistRows">
-                  {rows.map((e) => (
-                    <li key={e.number}>
-                      <label className="setOwnership">
-                        <input
-                          type="checkbox"
-                          aria-label={`${e.quantity ? "Owned" : "Mark owned"} card ${e.number}`}
-                          checked={e.quantity > 0}
-                          disabled={busy || editing || e.quantity > 0}
-                          onChange={() => void markOwned(e)}
-                        />
-                        <span
-                          className={e.quantity ? "setOwned" : "setMissing"}
-                        >
-                          {e.quantity ? "Owned" : "Missing"}
-                        </span>
-                      </label>
-                      <div>
-                        <strong>
-                          #{e.number}
-                          {e.player ? ` · ${e.player}` : ""}
-                        </strong>
-                        {e.team ? <small>{e.team}</small> : null}
-                      </div>
-                      <span>
-                        {e.quantity ? `Qty ${e.quantity}` : "Need 1"}
-                        {e.cardIds[0] ? (
-                          <Link
-                            className="setViewCard"
-                            href={`/card/${e.cardIds[0]}`}
-                          >
-                            View card
-                          </Link>
-                        ) : (
-                          <button
-                            className="btn ghost setAddCard"
-                            aria-label={`Add owned card ${e.number}`}
-                            disabled={busy || editing}
-                            onClick={() => void markOwned(e)}
-                          >
-                            Add card
-                          </button>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {!rows.length ? (
-                  <p className="helperText">No entries match this view.</p>
-                ) : null}
-              </>
-            ) : null}
-          </section>
-        ) : !loading && !editing ? (
-          <section className="panel">
-            <h2>Start tracking a set.</h2>
-            <p>
-              Define the expected card numbers, and your saved cards will show
-              how close you are to finishing.
-            </p>
-          </section>
-        ) : null}
       </PageShell>
     </AuthGate>
   );

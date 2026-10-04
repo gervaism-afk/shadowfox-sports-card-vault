@@ -7,8 +7,13 @@ import {
   type PublishedChecklist,
 } from "./checklist-parser";
 import { parseHockeySets, parseBaseballSets } from "./parsers";
+import { parseTcdbChecklist, tcdbGroups, tcdbProduct } from "./tcdb-parser";
 export function checklistUrl(value: string, sport: string) {
   const url = new URL(value);
+  if (
+    url.hostname === "www.tcdb.com" &&
+    /^\/Checklist\.cfm\/sid\/\d+\/[A-Za-z0-9%_.-]+$/.test(url.pathname)
+  ) return url;
   if (
     url.protocol !== "https:" ||
     url.port ||
@@ -71,7 +76,27 @@ export const getPublishedChecklist = unstable_cache(
       brand = "",
       set = "",
       groups;
-    if (sport === "Hockey") {
+    if (url.hostname === "www.tcdb.com") {
+      const html = await fetchText(url.href), $ = load(html);
+      const title = $("title").text().replace(/ (?:Hockey|Baseball) Checklist \| Trading Card Database$/, "").trim();
+      if (!$("title").text().includes(`${sport} Checklist | Trading Card Database`)) throw new Error("This checklist does not match the selected sport.");
+      const product = tcdbProduct(title);
+      if (!product) throw new Error("Could not verify this set's year and brand.");
+      ({ year, brand, set } = product);
+      const sid = url.pathname.split("/")[3], first = parseTcdbChecklist(html, sid);
+      if (first.pages > 10) throw new Error("This source exceeds the supported 1,000-card limit. Choose a smaller checklist section.");
+      const entries = [...first.entries];
+      for (let page = 2; page <= first.pages; page += 3) {
+        const pages = Array.from({ length: Math.min(3, first.pages - page + 1) }, (_, offset) => page + offset);
+        const parts = await Promise.all(pages.map(async number => parseTcdbChecklist(await fetchText(`${url.href}?PageIndex=${number}`), sid)));
+        for (const part of parts) {
+          if (!part.entries.length) throw new Error("A checklist page is unavailable. Try again later.");
+          entries.push(...part.entries);
+        }
+      }
+      if (new Set(entries.map(e => e.number.toUpperCase())).size !== entries.length) throw new Error("Checklist pagination returned duplicate card numbers.");
+      groups = tcdbGroups(entries);
+    } else if (sport === "Hockey") {
       const html = await fetchText(url.href);
       const $ = load(html);
       const title =
@@ -116,13 +141,13 @@ export const getPublishedChecklist = unstable_cache(
       set,
       url: url.href,
       source:
-        sport === "Hockey"
+        url.hostname === "www.tcdb.com" ? "Trading Card Database community checklist" : sport === "Hockey"
           ? "Upper Deck published checklist"
           : "BaseballCardPedia published checklist",
       checkedAt: new Date().toISOString(),
       groups,
     };
   },
-  ["published-card-checklist-v3"],
+  ["published-card-checklist-v4"],
   { revalidate: 6 * 60 * 60, tags: ["card-catalog"] },
 );

@@ -3,7 +3,7 @@ import {
   checklistUrl,
   getPublishedChecklist,
 } from "@/lib/catalog/checklist-server";
-export const maxDuration = 30;
+export const maxDuration = 60;
 export async function GET(request: Request) {
   const p = new URL(request.url).searchParams,
     sport = p.get("sport"),

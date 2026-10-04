@@ -139,7 +139,9 @@ export function validateChecklist(value: Omit<SetChecklist, "id">) {
     const url = new URL(value.source_url);
     if (
       url.protocol !== "https:" ||
-      !["upperdeck.com", "baseballcardpedia.com"].includes(url.hostname)
+      !["upperdeck.com", "baseballcardpedia.com", "www.tcdb.com"].includes(url.hostname) ||
+      url.username || url.password || url.port || url.search || url.hash ||
+      (url.hostname === "www.tcdb.com" && !/^\/Checklist\.cfm\/sid\/\d+\/[A-Za-z0-9%_.-]+$/.test(url.pathname))
     )
       throw new Error("Invalid checklist source.");
   }

@@ -168,6 +168,14 @@ await db.exec('reset role; set role anon;');await assert.rejects(db.query('selec
 console.log('PASS saved set checklists isolate owners, refuse reassignment and deny anonymous reads');
 await db.exec('reset role;');await db.exec(await readFile(new URL('../supabase/migrations/20261002234604_published_checklist_sources.sql',import.meta.url),'utf8'));
 assert.equal((await db.query("select count(*)::int n from information_schema.columns where table_name='set_checklists' and column_name like 'source_%'")).rows[0].n,3);
+await db.exec(await readFile(new URL('../supabase/migrations/20261004013643_tcdb_checklist_source.sql', import.meta.url), 'utf8'));
+await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${a}',false);`);
+const communityList = crypto.randomUUID();
+await db.query("insert into public.set_checklists(id,user_id,title,sport,year,brand,set_name,entries,source_url) values($1,$2,'Community source','Hockey','2026-27','Upper Deck','Tim Hortons','[{\"number\":\"14\",\"player\":\"Nick Suzuki\",\"team\":\"\"}]','https://www.tcdb.com/Checklist.cfm/sid/688992/2026-27-Upper-Deck-Tim-Hortons')", [communityList,a]);
+await assert.rejects(db.query("update public.set_checklists set source_url='https://www.tcdb.com.evil.example/Checklist.cfm/sid/1/x' where id=$1", [communityList]), /check constraint/);
+await db.query('delete from public.set_checklists where id=$1', [communityList]);
+await db.exec('reset role;');
+console.log('PASS community checklist source is allowed without widening ownership or URL hosts');
 await db.exec(`reset role;create table if not exists public.site_content(key text primary key,value jsonb not null,updated_at timestamptz not null default now());grant all on public.site_content to service_role;`);
 await db.exec(await readFile(new URL('../supabase/migrations/20261003011723_admin_activity_history.sql',import.meta.url),'utf8'));
 await db.exec(await readFile(new URL('../supabase/migrations/20261003012508_admin_activity_service_access.sql',import.meta.url),'utf8'));
