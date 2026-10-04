@@ -11,12 +11,14 @@ import { useParams, useRouter } from "next/navigation";
 import { deleteCard, getCard, saveCard } from "@/lib/storage";
 import { CardRecord } from "@/lib/types";
 import { recordTotal } from "@/lib/utils";
+import { usePhotoCrop } from "@/components/usePhotoCrop";
 import { prepareCardImage } from "@/lib/images";
 import { duplicateKey, ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
 
 export default function CardDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { chooseCrop, cropDialog } = usePhotoCrop();
   const [card, setCard] = useState<CardRecord | null>(null);
   const [savedCard, setSavedCard] = useState<CardRecord | null>(null);
   const [status, setStatus] = useState("");
@@ -48,7 +50,10 @@ export default function CardDetailPage() {
     const task = ++photoTask.current;
     setBusy(true); setStatus("Preparing photo…");
     try {
-      const data = await prepareCardImage(file);
+      const prepared = await prepareCardImage(file);
+      if (task !== photoTask.current) return;
+      const data = await chooseCrop(prepared, `${nextSide} photo`);
+      if (!data) { if (task === photoTask.current) setStatus("Photo cancelled. Your previous photo is unchanged."); return; }
       if (task !== photoTask.current) return;
       setCard((previous) => previous ? { ...previous, [nextSide === "front" ? "frontImage" : "backImage"]: data } : previous);
       setSide(nextSide); setStatus("Photo updated. Save Changes to keep it.");
@@ -63,6 +68,7 @@ export default function CardDetailPage() {
     return (
       <AuthGate>
         <PageShell>
+        {cropDialog}
           <section className="workflowPageHeader"><div><div className="vaultEyebrow">Your collection</div><h1 className="workflowTitle">Card detail</h1></div></section>
           <section className="panel" role="status">{loading ? "Opening your card…" : status || "Card not found."}</section>
           <Link className="btn ghost" href="/collection">Back to Collection</Link>
@@ -83,6 +89,7 @@ export default function CardDetailPage() {
   return (
     <AuthGate>
       <PageShell>
+        {cropDialog}
         <section className="workflowPageHeader">
           <div><Link className="vaultEyebrow" href="/collection">← Your collection</Link><h1 className="workflowTitle">{card.player || "Untitled card"}</h1><p className="workflowIntro">{[card.year, card.brand, card.set].filter(Boolean).join(" · ") || "A card in your ShadowFox vault."}</p></div>
           {!editing ? <button className="btn primary" aria-expanded={false} aria-controls="card-edit-panel" onClick={() => { setEditing(true); setStatus(""); }}>Edit card</button> : <span className="helperText">Editing card details</span>}

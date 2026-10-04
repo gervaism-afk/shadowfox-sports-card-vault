@@ -96,6 +96,11 @@ async function fixture(page: Page, initial: ReturnType<typeof row>[] = []) {
   await page.route('**/api/pricing/sold?*',route=>route.fulfill({json:{status:'complete',matchedCount:0,estimateCad:null,items:[],message:'No confidently matching sales found.'}}));
   return { rows, calls, binders, memberships, wants, transactions,checklists };
 }
+async function acceptFullPhoto(page:Page) {
+ await page.getByRole('button',{name:'Use full photo',exact:true}).click();
+ await expect(page.getByRole('dialog',{name:/Crop/})).toHaveCount(0);
+}
+
 async function cardImage(page: Page, player = 'CONNOR MCDAVID', year = '2023', brand = 'Upper Deck', number = '201') {
   const url = await page.evaluate(({ player, year, brand, number }) => {
     const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 800;
@@ -115,7 +120,7 @@ test('real local OCR, sold-price estimate, save, and collection navigation', asy
   const externalOcr: string[] = [];
   page.on('request', (request) => { if (/jsdelivr|tessdata|projectnaptha/.test(request.url())) externalOcr.push(request.url()); });
   await page.goto('/scan');
-  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
   await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save Card', exact: true })).toBeDisabled();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor Mcdavid', { timeout: 60000 });
@@ -147,13 +152,13 @@ test('real local OCR, sold-price estimate, save, and collection navigation', asy
 test('a second scan clears previous values; duplicate quantity uses atomic RPC', async ({ page }) => {
   const backend = await fixture(page, [row({ player: 'John Smith', year: '2024', brand: 'Topps', card_number: '100', subset: 'Young Guns', sport: 'Hockey', rookie: true })]);
   await page.goto('/scan');
-  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
   await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor Mcdavid', { timeout: 60000 });
   await expect(page.getByRole('button', { name: 'Save Card', exact: true })).toBeEnabled();
   await page.getByLabel('Notes', { exact: true }).fill('Old scan notes');
   await page.getByLabel('Estimated Value CAD').fill('999');
-  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page, 'JOHN SMITH', '2024', 'Topps', '100'));
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page, 'JOHN SMITH', '2024', 'Topps', '100'));await acceptFullPhoto(page);
   await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('John Smith', { timeout: 60000 });
   await expect(page.getByLabel('Notes', { exact: true })).toHaveValue('');
@@ -198,12 +203,12 @@ test('AI fills editable details, combines front and back, and saves corrections'
     await route.fulfill({ json: { fields: { sport: 'Hockey', player: 'Connor McDavid', year: '2023-24', brand: 'Upper Deck', set: 'Series One', subset: 'Young Guns', cardNumber: '201', parallel: requests.length > 1 ? 'Clear Cut' : null }, warnings: ['Confirm the parallel using the back photo.'], evidence: 'Visible Young Guns #201' } });
   });
   await page.goto('/scan');
-  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
   await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor McDavid');
   await expect(page.getByLabel('Set', { exact: true })).toHaveValue('Series One');
   await expect(page.getByText('Confirm the parallel using the back photo.')).toBeVisible();
-  await page.getByLabel('Upload back image').setInputFiles(await cardImage(page));
+  await page.getByLabel('Upload back image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
   await page.getByRole('button', { name: 'Identify Card' }).click();
   await expect(page.getByLabel('Parallel', { exact: true })).toHaveValue('Clear Cut');
   expect(requests[1].frontImage).toMatch(/^data:image/);
@@ -221,7 +226,7 @@ test('130point pasted prices require review, convert USD to CAD, and persist an 
   await page.route('**/api/identify', route => route.fulfill({ json: { fields: { sport: 'Hockey', player: 'Connor McDavid', year: '2015-16', brand: 'Upper Deck', set: 'Series One', subset: 'Young Guns', cardNumber: '201', gradingCompany: 'PSA', grade: '9' }, warnings: [], evidence: 'Synthetic test' } }));
   await page.route('**/api/pricing/exchange-rate', route => route.fulfill({ json: { rate: 1.4, date: new Date().toISOString().slice(0, 10), source: 'Bank of Canada' } }));
   await page.goto('/scan');
-  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
   await page.getByRole('button', { name: 'Identify Card', exact: true }).click();
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('Connor McDavid');
   if (await page.getByText('Pricing & market research · optional', {exact:true}).count()) await page.getByText('Pricing & market research · optional', {exact:true}).click();
@@ -364,11 +369,11 @@ test('photos wait for one combined identification and stopped scans cannot overw
     await route.fulfill({ json: { fields: { player: 'Stale result' }, warnings: [], evidence: '' } }).catch(() => {});
   });
   await page.goto('/scan');
-  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+  await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
   await expect(page.getByText('Front photo ready.', { exact: false })).toBeVisible();
   const frontBefore = await page.getByRole('img', { name: 'Front preview' }).getAttribute('src');
   await expect(page.getByLabel('Take back card photo')).toHaveAttribute('capture', 'environment');
-  await page.getByLabel('Take back card photo').setInputFiles(await cardImage(page));
+  await page.getByLabel('Take back card photo').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
   await expect(page.getByRole('img', { name: 'Front preview' })).toHaveAttribute('src', frontBefore!);
   await expect(page.getByText('Back photo ready.', { exact: false })).toBeVisible();
   expect(calls).toBe(0);
@@ -659,7 +664,7 @@ test('saved pricing retains supporting sales and clears them after a manual valu
 test('uncertain scanner fields are highlighted and can be corrected or reviewed', async ({page}) => {
  const backend=await fixture(page);
  await page.route('**/api/identify',route=>route.fulfill({json:{fields:{sport:'Hockey',player:'Nick Suzuki',year:'2021-22',brand:'Upper Deck',set:'MVP',cardNumber:'87'},warnings:[],evidence:'Synthetic test',reviewFields:[{field:'year',reason:'Season inferred from card design.'},{field:'parallel',reason:'Glare prevents a base/parallel match.'}]}}));
- await page.goto('/scan');await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+ await page.goto('/scan');await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
  await page.getByRole('button',{name:'Identify Card',exact:true}).click();
  const review=page.getByRole('region',{name:'Scan fields to review'});
  await expect(review).toContainText('2 fields need a closer look');
@@ -736,8 +741,8 @@ test('manual card reference photos can be filled, reviewed and saved with attrib
 
 test('card editor offers front and back camera capture, previews both sides, cancels drafts and saves photos', async ({page})=>{
  const original=row({player:'Camera card',quantity:4});const backend=await fixture(page,[original]);await page.setViewportSize({width:390,height:844});await page.goto(`/card/${original.id}`);await page.getByRole('button',{name:'Edit card',exact:true}).click();
- await expect(page.getByLabel('Take front photo')).toHaveAttribute('capture','environment');await expect(page.getByLabel('Take back photo')).toHaveAttribute('capture','environment');await page.getByLabel('Take front photo').setInputFiles(await cardImage(page));await expect(page.getByText('Photo updated. Save Changes to keep it.',{exact:true})).toBeVisible();await expect(page.locator('.photoEditorSide').first().locator('img')).toHaveCount(1);expect(backend.rows[0].front_image_url).toBe('');await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Edit card',exact:true}).click();await expect(page.locator('.photoEditorSide').first().locator('img')).toHaveCount(0);
- await page.getByLabel('Take front photo').setInputFiles(await cardImage(page));await expect(page.getByLabel('Take back photo')).toBeEnabled();await page.getByLabel('Take back photo').setInputFiles(await cardImage(page,'NICK SUZUKI'));await expect(page.getByRole('button',{name:'Save Changes',exact:true})).toBeEnabled();await expect(page.locator('.photoEditorSide').last().locator('img')).toHaveCount(1);
+ await expect(page.getByLabel('Take front photo')).toHaveAttribute('capture','environment');await expect(page.getByLabel('Take back photo')).toHaveAttribute('capture','environment');await page.getByLabel('Take front photo').setInputFiles(await cardImage(page));await acceptFullPhoto(page);await expect(page.getByText('Photo updated. Save Changes to keep it.',{exact:true})).toBeVisible();await expect(page.locator('.photoEditorSide').first().locator('img')).toHaveCount(1);expect(backend.rows[0].front_image_url).toBe('');await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Edit card',exact:true}).click();await expect(page.locator('.photoEditorSide').first().locator('img')).toHaveCount(0);
+ await page.getByLabel('Take front photo').setInputFiles(await cardImage(page));await acceptFullPhoto(page);await expect(page.getByLabel('Take back photo')).toBeEnabled();await page.getByLabel('Take back photo').setInputFiles(await cardImage(page,'NICK SUZUKI'));await acceptFullPhoto(page);await expect(page.getByRole('button',{name:'Save Changes',exact:true})).toBeEnabled();await expect(page.locator('.photoEditorSide').last().locator('img')).toHaveCount(1);
  for(const width of [320,390,768]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/workspace/shadowfox-card-editor-mobile.png',fullPage:true});await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();expect(backend.rows[0].quantity).toBe(4);expect(backend.rows[0].front_image_url).toContain('/storage/v1/object/public/card-images/');expect(backend.rows[0].back_image_url).toContain('/storage/v1/object/public/card-images/');
 });
 
@@ -757,7 +762,7 @@ test('modern add card keeps both capture sides clear and optional fields tucked 
  await expect(page.getByLabel('Take back card photo')).toHaveAttribute('capture','environment');
  await expect(page.getByRole('button',{name:'Identify Card',exact:true})).toBeDisabled();
  await page.screenshot({path:'/workspace/shadowfox-add-card-modern-start-mobile.png',fullPage:true});
- await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));
+ await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
  await expect(page.getByText('Front photo ready.', {exact:false})).toBeVisible();
  await expect(page.getByLabel('Parallel',{exact:true})).not.toBeVisible();
  await page.getByText('Variation & grading · optional',{exact:true}).click();
@@ -773,4 +778,36 @@ test('modern add card keeps both capture sides clear and optional fields tucked 
  await page.getByLabel('Player',{exact:true}).fill('Test Player');
  await page.getByRole('button',{name:/Save/}).click();
  await expect(page).toHaveURL(/\/collection$/);
+});
+
+test('photo cropping saves only the selected card area and cancellation preserves both sides',async({page})=>{
+ const backend=await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/scan');
+ const image=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=400;canvas.height=600;const context=canvas.getContext('2d')!;context.fillStyle='red';context.fillRect(0,0,400,600);context.fillStyle='blue';context.fillRect(100,100,200,400);return canvas.toDataURL('image/png').split(',')[1];});
+ const file={name:'card-with-background.png',mimeType:'image/png',buffer:Buffer.from(image,'base64')};
+ await page.getByLabel('Take card photo').setInputFiles(file);
+ const dialog=page.getByRole('dialog',{name:'Crop front photo',exact:true});await expect(dialog).toBeVisible();
+ await expect(page.getByRole('img',{name:'Front preview',exact:true})).toHaveCount(0);
+ const handle=await dialog.locator('.photoCropHandle.nw').boundingBox();expect(handle).not.toBeNull();
+ await page.mouse.move(handle!.x+14,handle!.y+14);await page.mouse.down();await page.mouse.move(handle!.x+38,handle!.y+38,{steps:4});await page.mouse.up();
+ expect(await dialog.locator('.photoCropFrame').evaluate(el=>parseFloat((el as HTMLElement).style.left))).toBeGreaterThan(0);
+ await dialog.getByText('Fine adjustments',{exact:true}).click();
+ async function adjust(label:string,value:string){await page.getByLabel(label,{exact:true}).evaluate((input,value)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));},value);}
+ await adjust('Crop width','50');await adjust('Crop height','66');await adjust('Horizontal crop position','25');await adjust('Vertical crop position','17');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:'/workspace/shadowfox-photo-crop-mobile.png',fullPage:true});
+ await page.getByRole('button',{name:'Use cropped photo',exact:true}).click();
+ const front=page.getByRole('img',{name:'Front preview',exact:true});await expect(front).toBeVisible();
+ const pixels=await front.evaluate(async img=>{const image=img as HTMLImageElement;await image.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const context=canvas.getContext('2d')!;context.drawImage(image,0,0);return {width:canvas.width,height:canvas.height,pixel:Array.from(context.getImageData(5,5,1,1).data)};});
+ expect(pixels.width).toBe(200);expect(pixels.height).toBe(396);expect(pixels.pixel[2]).toBeGreaterThan(240);expect(pixels.pixel[0]).toBeLessThan(15);
+ const original=await front.getAttribute('src');
+ await page.getByLabel('Take back card photo').setInputFiles(file);await expect(page.getByRole('dialog',{name:'Crop back photo',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Cancel photo crop',exact:true}).click();
+ await expect(front).toHaveAttribute('src',original!);await expect(page.getByRole('img',{name:'Back preview',exact:true})).toHaveCount(0);
+ await page.getByLabel('Upload front image').setInputFiles(file);await expect(dialog).toBeVisible();await page.keyboard.press('Escape');
+ await expect(front).toHaveAttribute('src',original!);await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.getByLabel('Upload back image').setInputFiles(file);await acceptFullPhoto(page);await expect(page.getByRole('img',{name:'Back preview',exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'Enter manually',exact:true}).click();await page.getByLabel('Take back image photo').setInputFiles(file);
+ await expect(page.getByRole('dialog',{name:'Crop back image',exact:true})).toBeVisible();await page.getByRole('button',{name:'Use cropped photo',exact:true}).click();
+ await expect(page.getByRole('img',{name:'Back Image',exact:true})).toBeVisible();await page.getByLabel('Player',{exact:true}).fill('Manual photo test');await page.getByRole('button',{name:'Save Card',exact:true}).click();
+ await expect(page).toHaveURL(/\/collection$/);expect(backend.rows[0].back_image_url).toContain('/storage/v1/object/public/card-images/');expect(backend.rows[0].front_image_url).toBe('');
 });

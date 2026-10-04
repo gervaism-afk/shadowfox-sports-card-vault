@@ -8,6 +8,7 @@ import SoldPriceEstimator from "@/components/SoldPriceEstimator";
 import { emptyCard } from "@/lib/defaults";
 import type { CardRecord } from "@/lib/types";
 import { findDuplicate, increaseQuantity, saveCard } from "@/lib/storage";
+import { usePhotoCrop } from "@/components/usePhotoCrop";
 import { prepareCardImage } from "@/lib/images";
 import { recognizeCardImage } from "@/lib/ocr-browser";
 import { computeConfidence, parseOcrText } from "@/lib/ocr";
@@ -17,6 +18,7 @@ import { identityFields, parseIdentification, type ReviewField } from "@/lib/ai-
 import { duplicateKey, ebayActiveUrl, ebaySoldUrl } from "@/lib/matching";
 
 export default function ScanPage() {
+  const { chooseCrop, cropDialog } = usePhotoCrop();
   const [card, setCard] = useState<CardRecord>(emptyCard);
   const [status, setStatus] = useState("Add a front photo to get started.");
   const [reviewFields,setReviewFields]=useState<ReviewField[]>([]);
@@ -93,7 +95,10 @@ export default function ScanPage() {
     controller.current = task;
     try {
       setStatus("Preparing image…");
-      const image = await prepareCardImage(file);
+      const prepared = await prepareCardImage(file);
+      if (task.signal.aborted) return;
+      const image = await chooseCrop(prepared, back ? "back photo" : "front photo");
+      if (!image) { if (!task.signal.aborted) setStatus("Photo cancelled. Your previous photos are unchanged."); return; }
       if (task.signal.aborted) return;
       if (back) {
         setCard((previous) => ({ ...previous, backImage: image }));
@@ -131,6 +136,7 @@ export default function ScanPage() {
   }
 
   return <AuthGate><PageShell>
+    {cropDialog}
     <div className="addCardExperience">
     <header className="addCardHeader"><div><div className="vaultEyebrow">YOUR VAULT, ONE CARD AT A TIME</div><h1>Add a card</h1><p>Snap it. Check the details. Make it yours.</p></div><a className="addCardExit" href="/collection">Close <span aria-hidden="true">×</span></a></header>
     <nav className="addCardModes" aria-label="How to add a card"><span aria-current="page">Scan a card</span><a href="/manual">Enter manually</a></nav>
