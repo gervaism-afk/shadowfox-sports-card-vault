@@ -120,7 +120,7 @@ const communitySets = unstable_cache(async (sport: Sport, year: string) => {
     if (reference.sets.length) return reference;
     throw error;
   }
-}, ["tcdb-set-index-v2"], { revalidate: 86400, tags: ["card-catalog"] });
+}, ["tcdb-set-index-v3"], { revalidate: 86400, tags: ["card-catalog"] });
 export async function getCardCatalog(
   sport: Sport,
   year: string,

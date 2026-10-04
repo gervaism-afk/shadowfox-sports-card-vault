@@ -4,20 +4,27 @@ import { parseTcdbSets, parseTcdbChecklist, tcdbGroups, tcdbProduct } from '../l
 import { load } from 'cheerio';
 const output='data/community-checklists.json';
 const existing=existsSync(output)?JSON.parse(readFileSync(output,'utf8')):{checklists:{}};
+const current = new Date().getUTCFullYear();
+const historical = process.argv.includes('--history');
+const years = historical ? Array.from({length:current-2015+1},(_,i)=>2015+i) : [current,current-1,2015+(Math.floor(Date.now()/(7*86400000)) % Math.max(1,current-2016))];
+const requestLimit = historical ? 900 : 160;
 let requests=0, changed=0;
 async function html(url:string){
- if(++requests>70)throw new Error('Reference refresh reached its request limit.');
+ if(requests>=requestLimit)throw new Error('Reference refresh reached its request limit.');
+ requests++;
  await new Promise(resolve=>setTimeout(resolve,250));
  const raw=execFileSync('curl',['--fail','--silent','--show-error','--max-time','20','--user-agent','ShadowFox-Cards/1.0 (public checklist reference)',url],{maxBuffer:4*1024*1024}).toString();
  return raw;
 }
 async function refresh(){
-const current = new Date().getUTCFullYear();
-for(const [sport,year] of [['Hockey',String(current)],['Baseball',String(current)],['Hockey',String(current-1)],['Baseball',String(current-1)]]){
+for(const yearNumber of [...new Set(years)]) for(const sport of ['Hockey','Baseball']){
+ if(requests>=requestLimit)break;
+ const year=String(yearNumber);
  try{
   const sets=parseTcdbSets(await html(`https://www.tcdb.com/ViewAll.cfm/sp/${sport}/year/${year}`));
   const selected=sets.filter(row=> /^(Tim Hortons|MVP|O-Pee-Chee|Base|Chrome|Heritage|Bowman|Donruss|Prizm)$/.test(row.set)).slice(0,10);
   for(const product of selected){
+   if(requests>=requestLimit)break;
    try{
     const firstHtml=await html(product.url),title=load(firstHtml)('title').text();
     if(!title.endsWith(`${sport} Checklist | Trading Card Database`))throw new Error('Source does not match sport.');
@@ -33,6 +40,7 @@ for(const [sport,year] of [['Hockey',String(current)],['Baseball',String(current
     }
     if(new Set(entries.map(row=>row.number.toUpperCase())).size!==entries.length)throw new Error('Duplicate card numbers.');
     existing.checklists[product.url]={...verified,sport,url:product.url,source:'Trading Card Database community checklist · saved reference',checkedAt:new Date().toISOString(),groups:tcdbGroups(entries)};
+    writeFileSync(output,JSON.stringify(existing));
     changed++;console.log(`${sport} ${product.year} ${product.set}: saved ${entries.length} sourced entries`);
    }catch(error){console.log(`Keeping previous reference for ${product.year} ${product.set}: ${error instanceof Error?error.message:'Source unavailable'}`);}
   }

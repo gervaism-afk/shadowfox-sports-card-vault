@@ -155,6 +155,6 @@ export const getPublishedChecklist = unstable_cache(
       groups,
     };
   },
-  ["published-card-checklist-v5"],
+  ["published-card-checklist-v6"],
   { revalidate: 6 * 60 * 60, tags: ["card-catalog"] },
 );

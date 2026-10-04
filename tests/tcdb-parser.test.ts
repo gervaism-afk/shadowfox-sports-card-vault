@@ -23,3 +23,22 @@ test('bundled references are attributed, valid checklists and include full Tim H
  const {readFile}=await import('node:fs/promises');const saved=JSON.parse(await readFile(new URL('../data/community-checklists.json',import.meta.url),'utf8'));const rows=Object.values(saved.checklists) as any[];assert.ok(rows.length>=18);for(const data of rows){assert.ok(Number.isFinite(Date.parse(data.checkedAt)));assert.ok(data.source.includes('saved reference'));validateChecklist({title:data.set,sport:data.sport,year:data.year,brand:data.brand,set_name:data.set,subset:'',parallel:'',entries:data.groups[0].entries,source_url:data.url});}
  assert.equal(rows.find(d=>d.year==='2026-27'&&d.set==='Tim Hortons').groups[0].entries.length,120);assert.equal(rows.find(d=>d.year==='2026'&&d.brand==='Topps'&&d.set==='Base').groups[0].entries.length,700);
 });
+
+test('historical references cover both sports from 2015 onward without duplicate card numbers', async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const saved=JSON.parse(await readFile(new URL('../data/community-checklists.json',import.meta.url),'utf8'));
+ const rows=Object.values(saved.checklists) as any[];
+ for(let year=2015;year<=2025;year++) for(const sport of ['Hockey','Baseball']) {
+  const releases=rows.filter(d=>d.sport===sport&&Number(d.year.slice(0,4))===year);
+  assert.ok(releases.length>=2,`${sport} ${year} needs multiple published releases`);
+ }
+ for(const data of rows) for(const group of data.groups) {
+  assert.ok(group.entries.length>0);
+  assert.equal(new Set(group.entries.map((e:any)=>e.number.toUpperCase())).size,group.entries.length, data.url);
+ }
+});
+
+test('primary image suffix becomes its printed card number when a plain row is absent',()=>{
+ const entry=(number:string)=>({number,player:'Player',team:''});
+ assert.deepEqual(tcdbGroups(['1a','1b','1c','2','2a','BP-1'].map(entry))[0].entries.map(e=>e.number),['1','2','BP-1']);
+});

@@ -50,12 +50,15 @@ export function parseTcdbChecklist(html: string, sid: string) {
 }
 export function tcdbGroups(entries: ChecklistEntry[]): PublishedGroup[] {
   const numbers = new Set(entries.map(entry => entry.number.toUpperCase()));
-  // TCDB appends a/b/c to distinguish alternate images of the same printed number.
-  // Their actual parallel identity is not available in this table: do not import
-  // them as extra base cards or invent a variant name.
-  const base = entries.filter(entry => {
-    const alternate = /^(\d+)[a-z]+$/i.exec(entry.number);
-    return !alternate || !numbers.has(alternate[1]);
+  // TCDB appends a/b/c to distinguish versions of the same printed number.
+  // Some releases list the primary card as "1a", without a plain "1" row.
+  // Use that primary version once under its printed number; omit the other
+  // image variants rather than treating them as extra base cards.
+  const base = entries.flatMap(entry => {
+    const alternate = /^(\d+)([a-z]+)$/i.exec(entry.number);
+    if (!alternate) return [entry];
+    if (numbers.has(alternate[1]) || alternate[2].toLowerCase() !== "a") return [];
+    return [{ ...entry, number: alternate[1] }];
   });
   return base.length ? [{ id: "base-complete", label: "Complete published set", subset: "", parallel: "", entries: base }] : [];
 }
