@@ -64,6 +64,28 @@ export default function CardDetailPage() {
     }
   }
 
+  async function cropExistingPhoto(nextSide: "front" | "back") {
+    if (!card || busy) return;
+    const source = card[nextSide === "front" ? "frontImage" : "backImage"];
+    if (!source) return;
+    const task = ++photoTask.current;
+    setBusy(true); setStatus("Opening photo for cropping…");
+    try {
+      const response = await fetch(source, {credentials: "omit", signal: AbortSignal.timeout(15000)});
+      if (!response.ok) throw new Error("Could not open this photo. Try again or upload it from your device.");
+      const blob = await response.blob();
+      const prepared = await prepareCardImage(new File([blob], "card-photo", {type: blob.type}));
+      if (task !== photoTask.current) return;
+      const cropped = await chooseCrop(prepared, `${nextSide} photo`);
+      if (task !== photoTask.current) return;
+      if (!cropped) {setStatus("Crop cancelled. Your previous photo is unchanged.");return;}
+      setCard(previous => previous ? {...previous,[nextSide === "front" ? "frontImage" : "backImage"]:cropped} : previous);
+      setSide(nextSide);setStatus("Photo cropped. Save Changes to keep it.");
+    } catch (error: any) {
+      if (task === photoTask.current) setStatus(error.message || "Could not open this photo. Try uploading it from your device.");
+    } finally {if (task === photoTask.current) setBusy(false);}
+  }
+
   if (!card) {
     return (
       <AuthGate>
@@ -124,10 +146,10 @@ export default function CardDetailPage() {
           <div className="workflowPanelHeading"><h2 ref={editHeading} tabIndex={-1}>Edit your card</h2><span className="helperText">Review, then save your changes</span></div>
           <fieldset className="cardPhotoEditor" disabled={busy}>
             <legend>Card photos</legend>
-            <p className="helperText">Take a new photo or choose one from your device. Save Changes keeps your edits; Cancel restores the saved card.</p>
+            <p className="helperText">Crop your existing photo, take a new one, or choose one from your device. Save Changes keeps your edits; Cancel restores the saved card.</p>
             <div className="photoEditorGrid">{(["front", "back"] as const).map(photoSide => {
               const key = photoSide === "front" ? "frontImage" : "backImage";
-              return <section className="photoEditorSide" key={photoSide}><h3>{photoSide === "front" ? "Front" : "Back"}</h3><div className="photoEditorPreview">{card[key] ? <img src={card[key]} alt={`${photoSide} preview of ${card.player}`}/> : <span>No {photoSide} photo</span>}</div><div className="buttonRow"><label className="btn primary">Take photo<input className="uploadInput" aria-label={`Take ${photoSide} photo`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void replacePhoto(file, photoSide); }}/></label><label className="btn ghost">Upload<input className="uploadInput" aria-label={`Replace ${photoSide} image`} type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void replacePhoto(file, photoSide); }}/></label>{card[key] ? <button className="btn ghost" onClick={() => setCard(previous => previous ? {...previous, [key]: ""} : previous)}>Remove {photoSide} photo</button> : null}</div></section>;
+              return <section className="photoEditorSide" key={photoSide}><h3>{photoSide === "front" ? "Front" : "Back"}</h3><div className="photoEditorPreview">{card[key] ? <img src={card[key]} alt={`${photoSide} preview of ${card.player}`}/> : <span>No {photoSide} photo</span>}</div><div className="buttonRow"><label className="btn primary">Take photo<input className="uploadInput" aria-label={`Take ${photoSide} photo`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void replacePhoto(file, photoSide); }}/></label><label className="btn ghost">Upload<input className="uploadInput" aria-label={`Replace ${photoSide} image`} type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void replacePhoto(file, photoSide); }}/></label>{card[key] ? <button type="button" className="btn ghost" onClick={() => void cropExistingPhoto(photoSide)}>Crop {photoSide} photo</button> : null}{card[key] ? <button className="btn ghost" onClick={() => setCard(previous => previous ? {...previous, [key]: ""} : previous)}>Remove {photoSide} photo</button> : null}</div></section>;
             })}</div>
           </fieldset>
           <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><CardForm value={card} onChange={setCard} showImageFields={false} collapsibleExtras /></fieldset>

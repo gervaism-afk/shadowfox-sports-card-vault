@@ -830,3 +830,17 @@ test('settings change actual card sizes, remember the choice, and apply across g
  }
  await page.evaluate(({userId})=>{localStorage.setItem(`shadowfox-card-size:${userId}`,'unexpected');localStorage.setItem('shadowfox-card-size:another-user','small');},{userId});await page.reload();await expect(page.locator('[data-card-size]')).toHaveAttribute('data-card-size','medium');
 });
+
+test('existing front and back photos can be cropped in edit without replacement and only persist on save',async({page})=>{
+ const saved=row({player:'Existing crop card'});const backend=await fixture(page,[saved]);await page.goto(`/card/${saved.id}`);
+ const image=await cardImage(page);const url='http://127.0.0.1:54321/storage/v1/object/public/card-images/existing.jpg';
+ await page.route(url,route=>route.fulfill({contentType:'image/png',body:image.buffer}));
+ backend.rows[0].front_image_url=url;backend.rows[0].back_image_url=url;await page.reload();
+ await page.getByRole('button',{name:'Edit card',exact:true}).click();
+ await page.getByRole('button',{name:'Crop front photo',exact:true}).click();await expect(page.getByRole('dialog',{name:'Crop front photo',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Cancel photo crop',exact:true}).click();await expect(page.locator('.photoEditorSide').first().locator('img')).toHaveAttribute('src',url);
+ await page.getByRole('button',{name:'Crop front photo',exact:true}).click();await page.getByRole('button',{name:'Use cropped photo',exact:true}).click();await expect(page.locator('.photoEditorSide').first().locator('img')).toHaveAttribute('src',/^data:image/);expect(backend.rows[0].front_image_url).toBe(url);
+ await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Edit card',exact:true}).click();await expect(page.locator('.photoEditorSide').first().locator('img')).toHaveAttribute('src',url);
+ await page.getByRole('button',{name:'Crop back photo',exact:true}).click();await expect(page.getByRole('dialog',{name:'Crop back photo',exact:true})).toBeVisible();await page.getByRole('button',{name:'Use cropped photo',exact:true}).click();await expect(page.locator('.photoEditorSide').last().locator('img')).toHaveAttribute('src',/^data:image/);
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect(page.getByRole('button',{name:'Edit card',exact:true})).toBeVisible();expect(backend.rows[0].front_image_url).toBe(url);expect(backend.rows[0].back_image_url).not.toBe(url);
+});
