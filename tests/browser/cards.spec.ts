@@ -667,10 +667,10 @@ test('uncertain scanner fields are highlighted and can be corrected or reviewed'
  await page.goto('/scan');await page.getByLabel('Upload front image').setInputFiles(await cardImage(page));await acceptFullPhoto(page);
  await page.getByRole('button',{name:'Identify Card',exact:true}).click();
  const review=page.getByRole('region',{name:'Scan fields to review'});
- await expect(review).toContainText('2 fields need a closer look');
+ await expect(review).toContainText('2 details to confirm');
  await expect(review).toContainText('Glare prevents');
  await page.getByLabel('Year',{exact:true}).fill('2022-23');
- await expect(review).toContainText('1 field needs a closer look');
+ await expect(review).toContainText('1 detail to confirm');
  await review.getByRole('button',{name:'Mark reviewed'}).click();
  await expect(review).toHaveCount(0);
  await page.getByRole('button',{name:'Save Card',exact:true}).click();await expect(page).toHaveURL(/\/collection$/);
@@ -843,4 +843,16 @@ test('existing front and back photos can be cropped in edit without replacement 
  await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Edit card',exact:true}).click();await expect(page.locator('.photoEditorSide').first().locator('img')).toHaveAttribute('src',url);
  await page.getByRole('button',{name:'Crop back photo',exact:true}).click();await expect(page.getByRole('dialog',{name:'Crop back photo',exact:true})).toBeVisible();await page.getByRole('button',{name:'Use cropped photo',exact:true}).click();await expect(page.locator('.photoEditorSide').last().locator('img')).toHaveAttribute('src',/^data:image/);
  await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect(page.getByRole('button',{name:'Edit card',exact:true})).toBeVisible();expect(backend.rows[0].front_image_url).toBe(url);expect(backend.rows[0].back_image_url).not.toBe(url);
+});
+
+test('AI service outages use both photos and distinguish read details from actually missing values',async({page})=>{
+ await fixture(page);await page.route('**/api/identify',route=>route.fulfill({status:502,json:{code:'AI_CREDITS_EXHAUSTED',error:'AI scanning is temporarily unavailable because the service has run out of credits. Text reading is still available.'}}));
+ await page.goto('/scan');await page.getByLabel('Upload front image').setInputFiles(await cardImage(page,'CONNOR MCDAVID','','Upper Deck',''));await acceptFullPhoto(page);
+ await page.getByLabel('Upload back image').setInputFiles(await cardImage(page,'CONNOR MCDAVID','2023','Upper Deck','201'));await acceptFullPhoto(page);
+ await page.getByRole('button',{name:'Identify Card',exact:true}).click();
+ await expect(page.getByLabel('Card Number',{exact:true})).toHaveValue('201',{timeout:60000});await expect(page.getByLabel('Year',{exact:true})).toHaveValue('2023');
+ await expect(page.getByText('AI scanning is temporarily unavailable because the service has run out of credits. Text reading is still available.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Scan fields to review'})).toContainText('1 detail could not be read');
+ await expect(page.getByRole('region',{name:'Scan fields to review'})).toContainText('SetText recognition could not read');
+ await expect(page.getByRole('region',{name:'Scan fields to review'})).toContainText('Card numberRead from the photo');
 });

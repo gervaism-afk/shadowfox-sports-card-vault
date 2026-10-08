@@ -69,12 +69,15 @@ export default function ScanPage() {
       catch (error: any) {
         if (task.signal.aborted) return;
         setAiWarnings([error.message || "AI is unavailable.", "Local text reading was used. Review the details carefully."]);
-        const text = await recognizeCardImage(card.frontImage, message => { if (!task.signal.aborted) setStatus(message); }, task.signal);
+        const frontText = await recognizeCardImage(card.frontImage, message => { if (!task.signal.aborted) setStatus(`AI unavailable · ${message}`); }, task.signal);
+        if (task.signal.aborted) return;
+        const backText = card.backImage ? await recognizeCardImage(card.backImage, message => { if (!task.signal.aborted) setStatus(`Reading back photo · ${message}`); }, task.signal) : "";
+        const text = [frontText,backText].filter(Boolean).join("\n");
         if (task.signal.aborted) return;
         const guess = parseOcrText(text);
         const next=applyOcrGuess(card, guess); setCard(next);
-        setReviewFields((['player','year','brand','set','cardNumber','parallel'] as const).map(field=>({field,reason:next[field]?'Read with local OCR. Check this detail against the photo.':'Not identified by local OCR. Check your card.'}))); setOcrText(text); setConfidence(computeConfidence(guess, text));
-        setStatus("Text read. Review and complete the fields before saving.");
+        setReviewFields((['player','year','brand','set','cardNumber','parallel'] as const).filter(field=>field!== 'parallel' || !!next.parallel).map(field=>({field,reason:next[field]?'Read from the photo with text recognition. Confirm this detail.':'Text recognition could not read this detail. Add the back photo or enter it manually.'})));  setOcrText(text); setConfidence(computeConfidence(guess, text));
+        setStatus(text.trim() ? "Text-only scan ready. AI was unavailable; check the details read from your photos." : "No readable text found. Your photos are still here. Try clearer photos or enter the details manually.");
       }
     } catch (error: any) {
       if (!task.signal.aborted) setStatus(/chunk|Loading.*failed/i.test(error.message) ? "The app was updated while this page was open. Refresh this page and upload your photos again, or enter the details below." : error.message);

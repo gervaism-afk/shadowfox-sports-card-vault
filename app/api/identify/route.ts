@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { identificationProviderFailure } from '@/lib/identification-errors';
 import { identificationSchema, parseIdentification } from '@/lib/ai-identification';
 
 export const runtime = 'nodejs';
@@ -45,11 +46,15 @@ export async function POST(request: Request) {
         response_format: { type: 'json_schema', json_schema: { name: 'card_identification', strict: true, schema: identificationSchema } }
       })
     });
-    if (!response.ok) return NextResponse.json({ error: response.status === 429 ? 'The AI service is busy or its usage limit has been reached. Try again shortly.' : 'The AI service could not identify the card. Check the configured key and model in Vercel.' }, { status: 502 });
+    if (!response.ok) {
+      const failure = identificationProviderFailure(response.status);
+      console.warn("Card identification provider failure", {provider:openRouter ? "openrouter" : "openai", status:response.status, code:failure.code});
+      return NextResponse.json(failure, {status:502,headers:{'Cache-Control':'no-store'}});
+    }
     const result = await response.json();
     const choice = result.choices?.[0];
     const output = choice?.message?.content;
     if (typeof output !== 'string' || choice.finish_reason !== 'stop' || choice.message.refusal) throw new Error();
     return NextResponse.json(parseIdentification(JSON.parse(output)), { headers: { 'Cache-Control': 'no-store' } });
-  } catch { return NextResponse.json({ error: 'AI identification did not finish. Try a clearer photo or enter details manually.' }, { status: 502 }); }
+  } catch { console.warn('Card identification did not complete'); return NextResponse.json({ error: 'AI identification did not finish. Text reading is still available, or try again later.', code:'AI_INCOMPLETE' }, { status: 502 }); }
 }
