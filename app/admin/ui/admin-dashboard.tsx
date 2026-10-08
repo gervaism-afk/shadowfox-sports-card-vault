@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -11,6 +11,8 @@ type UserRow = {
   email?: string | null;
   role: "user" | "admin";
   created_at: string;
+  card_count?: number;
+  total_estimated_value?: number;
 };
 
 type Stats = {
@@ -108,6 +110,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserCards, setSelectedUserCards] = useState<UserCard[]>([]);
+  const collectionPanel = useRef<HTMLDivElement>(null);
+  const collectionRequest = useRef(0);
+  const [cardSearch, setCardSearch] = useState("");
   const [cardsLoading, setCardsLoading] = useState(false);
   const [editingCard, setEditingCard] = useState<EditableCard | null>(null);
   const [savingCard, setSavingCard] = useState(false);
@@ -203,6 +208,10 @@ export default function AdminDashboard() {
   }
 
   async function loadUserCards(userId: string) {
+    const request = ++collectionRequest.current;
+    setSelectedUserCards([]);
+    setEditingCard(null);
+    setCardSearch("");
     try {
       setCardsLoading(true);
       setSelectedUserId(userId);
@@ -211,6 +220,7 @@ export default function AdminDashboard() {
         { cache: "no-store" },
       );
       const json = await res.json();
+      if (request !== collectionRequest.current) return;
       setSelectedUserCards(json.cards ?? []);
       setCardsLoading(false);
     } catch (e: any) {
@@ -219,7 +229,7 @@ export default function AdminDashboard() {
         text: e.message || "The admin request failed.",
       });
     } finally {
-      setCardsLoading(false);
+      if (request === collectionRequest.current) setCardsLoading(false);
     }
   }
 
@@ -333,6 +343,29 @@ export default function AdminDashboard() {
     }
   }
 
+  useEffect(() => {
+    if (selectedUserId)
+      collectionPanel.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+  }, [selectedUserId]);
+  const selectedUser = users.find((u) => u.id === selectedUserId);
+  const visibleCards = selectedUserCards.filter((card) =>
+    [
+      card.player,
+      card.year,
+      card.brand,
+      card.set_name,
+      card.card_number,
+      card.team,
+      card.parallel,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(cardSearch.trim().toLowerCase()),
+  );
+
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / 20)), [total]);
 
   if (!ready)
@@ -430,74 +463,65 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="sfPanel sfTableWrap">
-        <table className="sfTable">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Joined</th>
-              <th className="right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={5}>Loading users...</td>
-              </tr>
-            ) : users.length === 0 ? (
-              <tr>
-                <td colSpan={5}>No users found.</td>
-              </tr>
-            ) : (
-              users.map((user) => (
-                <tr key={user.id}>
-                  <td>{user.username || "Unnamed User"}</td>
-                  <td>{user.email || "-"}</td>
-                  <td style={{ textTransform: "capitalize" }}>{user.role}</td>
-                  <td>
+      <section className="sfPanel" aria-label="User accounts">
+        <h2 className="sfSectionTitle">Users & collections</h2>
+        <p className="helperText">
+          Choose View Cards to open a collection and edit or delete its entries.
+        </p>
+        {loading ? (
+          <p>Loading users...</p>
+        ) : users.length === 0 ? (
+          <p>No users found.</p>
+        ) : (
+          <div className="adminUserList">
+            {users.map((user) => (
+              <article
+                className="adminUserRow"
+                key={user.id}
+                data-selected={selectedUserId === user.id}
+              >
+                <div className="adminUserIdentity">
+                  <strong>{user.username || "Unnamed User"}</strong>
+                  <div>{user.email || "No email"}</div>
+                  <p className="helperText">
+                    {user.role} · {user.card_count ?? 0} cards · Joined{" "}
                     {user.created_at
                       ? new Date(user.created_at).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td className="right">
-                    <div className="sfInlineActions">
-                      <button
-                        className="sfGhostBtn small"
-                        onClick={() => loadUserCards(user.id)}
-                      >
-                        View Cards
-                      </button>
-                      {user.role === "admin" ? (
-                        <button
-                          className="sfGhostBtn small"
-                          disabled={user.id === currentUser?.id}
-                          title={
-                            user.id === currentUser?.id
-                              ? "Your own admin access is protected"
-                              : undefined
-                          }
-                          onClick={() => updateRole(user.id, "user")}
-                        >
-                          Demote
-                        </button>
-                      ) : (
-                        <button
-                          className="sfGhostBtn small"
-                          onClick={() => updateRole(user.id, "admin")}
-                        >
-                          Promote
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                      : "—"}
+                  </p>
+                </div>
+                <div className="sfInlineActions">
+                  <button
+                    className="sfPrimaryBtn"
+                    onClick={() => loadUserCards(user.id)}
+                  >
+                    View Cards
+                  </button>
+                  <button
+                    className="sfGhostBtn small"
+                    disabled={
+                      user.id === currentUser?.id && user.role === "admin"
+                    }
+                    title={
+                      user.id === currentUser?.id
+                        ? "Your own admin access is protected"
+                        : undefined
+                    }
+                    onClick={() =>
+                      updateRole(
+                        user.id,
+                        user.role === "admin" ? "user" : "admin",
+                      )
+                    }
+                  >
+                    {user.role === "admin" ? "Demote" : "Promote"}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       <div className="sfPager">
         <div>
@@ -522,12 +546,22 @@ export default function AdminDashboard() {
       </div>
 
       {selectedUserId ? (
-        <div className="sfPanel">
+        <div className="sfPanel adminCollectionPanel" ref={collectionPanel}>
           <div className="sfAdminTop">
-            <h2 className="sfSectionTitle">User Cards</h2>
+            <div>
+              <h2 className="sfSectionTitle">User Cards</h2>
+              <p>
+                {selectedUser?.username ||
+                  selectedUser?.email ||
+                  "Selected user"}{" "}
+                · {selectedUserCards.length} entries
+              </p>
+            </div>
             <button
               className="sfGhostBtn"
               onClick={() => {
+                collectionRequest.current++;
+                setEditingCard(null);
                 setSelectedUserId(null);
                 setSelectedUserCards([]);
               }}
@@ -535,13 +569,25 @@ export default function AdminDashboard() {
               Close
             </button>
           </div>
+          <label className="field">
+            Search this collection
+            <input
+              className="sfInput"
+              value={cardSearch}
+              onChange={(e) => setCardSearch(e.target.value)}
+              placeholder="Player, team, set or card number"
+            />
+          </label>
           {cardsLoading ? (
             <p>Loading cards...</p>
           ) : selectedUserCards.length === 0 ? (
             <p>No cards found for this user.</p>
           ) : (
             <div className="sfCardList">
-              {selectedUserCards.map((card) => (
+              {visibleCards.length === 0 ? (
+                <p>No cards match your search.</p>
+              ) : null}
+              {visibleCards.map((card) => (
                 <div key={card.id} className="sfListCard">
                   <div>
                     <div className="sfListTitle">
@@ -550,7 +596,16 @@ export default function AdminDashboard() {
                         .join(" ")}
                     </div>
                     <div className="sfMuted">
-                      {card.team || "-"} · $
+                      {[
+                        card.set_name,
+                        card.card_number ? `#${card.card_number}` : "",
+                        card.parallel,
+                        `Qty ${card.quantity || 1}`,
+                        card.team,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}{" "}
+                      · $
                       {Number(card.estimated_value_cad || 0).toLocaleString()}
                     </div>
                     {card.notes ? (

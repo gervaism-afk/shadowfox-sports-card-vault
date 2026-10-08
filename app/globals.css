@@ -909,3 +909,13 @@ summary::marker { color: var(--accent); }
 }
 @media(max-width:480px) { .cardSizeChoices { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+/* Keep collection controls visible without scrolling a wide user table. */
+.adminUserList { display: grid; gap: 12px; margin-top: 20px; }
+.adminUserRow { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: center; padding: 18px; border: 1px solid var(--line); border-radius: 12px; }
+.adminUserRow[data-selected="true"] { border-color: var(--accent); }
+.adminUserIdentity { min-width: 0; overflow-wrap: anywhere; }
+.adminCollectionPanel { scroll-margin-top: 24px; }
+.adminCollectionPanel .sfListCard { display: flex; flex-wrap: wrap; gap: 16px; }
+.adminCollectionPanel .sfListCard > div:first-child { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.adminCollectionPanel .field { display: grid; gap: 8px; margin: 16px 0; }

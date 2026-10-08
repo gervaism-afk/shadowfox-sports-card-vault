@@ -258,7 +258,16 @@ test("admin card editor saves set, variant and quantity, and displays request fa
   await expect(
     page.getByRole("button", { name: "Demote", exact: true }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "View Cards", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const view = page.getByRole("button", { name: "View Cards", exact: true });
+  await expect(view).toBeVisible();
+  const bounds = await view.boundingBox();
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  await view.click();
+  await page.getByLabel("Search this collection").fill("unknown player");
+  await expect(page.getByText("No cards match your search.")).toBeVisible();
+  await page.getByLabel("Search this collection").fill("87");
+
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("Set", { exact: true }).fill("MVP Hockey");
   await page.getByLabel("Parallel", { exact: true }).fill("Silver");
@@ -271,6 +280,16 @@ test("admin card editor saves set, variant and quantity, and displays request fa
     quantity: 2,
   });
   expect(saved.user_id).toBeUndefined();
+  let deleted = false;
+  await page.route("**/api/admin/cards/*", (route) => {
+    deleted = route.request().method() === "DELETE";
+    return route.fulfill({ json: { success: true } });
+  });
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByText("Card deleted.", { exact: true })).toBeVisible();
+  expect(deleted).toBe(true);
+  await expect(page.getByText("No cards found for this user.")).toBeVisible();
   await page.route("**/api/admin/users?**", (route) =>
     route.fulfill({
       status: 500,
