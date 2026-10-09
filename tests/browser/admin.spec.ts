@@ -383,3 +383,48 @@ test("admin history filters, paginates and exports only the displayed page", asy
   }
   expect((await request.get("/api/admin/activity")).status()).toBe(401);
 });
+
+test("account tools filter inactive users, generate private recovery links and confirm deletion on phones", async ({ page, request }) => {
+  await fixture(page);
+  const collector = { id: "33333333-3333-4333-8333-333333333333", username: "Inactive collector", email: "collector@example.test", role: "user", created_at: "2026-01-01T00:00:00Z", last_sign_in_at: "2026-02-01T00:00:00Z", email_confirmed_at: "2026-01-01T00:00:00Z", card_count: 5 };
+  let filtered = false, deleted = false;
+  const actions: string[] = [];
+  await page.route("**/api/admin/users?**", route => {
+    filtered ||= new URL(route.request().url()).searchParams.get("activity") === "inactive";
+    return route.fulfill({ json: { users: deleted ? [] : [collector, { ...collector, id: user.id, email: user.email, role: "admin" }], total: deleted ? 0 : 2, stats: { totalUsers: 2, totalCards: 5, totalValue: 10 } } });
+  });
+  await page.route("**/api/admin/users/*/account", route => {
+    const input = route.request().postDataJSON(); actions.push(input.action);
+    if (input.action === "delete") { expect(input.confirmEmail).toBe(collector.email); deleted = true; }
+    return route.fulfill({ json: { success: true, ...(input.action === "recovery_link" ? { recoveryLink: "https://example.test/private-recovery-token" } : {}) } });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/admin");
+  await page.getByLabel("Account activity").selectOption("inactive");
+  await expect.poll(() => filtered).toBe(true);
+  const tools = page.getByRole("button", { name: "Account tools", exact: true });
+  await expect(tools.nth(1)).toBeDisabled();
+  await tools.first().click();
+  const dialog = page.getByRole("dialog", { name: "Account tools" });
+  await expect(dialog).toBeVisible();
+  const remove = dialog.getByRole("button", { name: "Delete account permanently" });
+  await expect(remove).toBeDisabled();
+  await dialog.getByRole("button", { name: "Send password reset email" }).click();
+  await expect(dialog.getByText(/Password reset email requested/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Generate recovery link" }).click();
+  await expect(dialog.getByLabel("Private recovery link")).toHaveValue("https://example.test/private-recovery-token");
+  await dialog.getByRole("button", { name: "Close account tools" }).click();
+  await tools.first().click();
+  await expect(dialog.getByLabel("Private recovery link")).toHaveCount(0);
+  await dialog.getByLabel("Type email to confirm deletion").fill("wrong@example.test");
+  await expect(remove).toBeDisabled();
+  await dialog.getByLabel("Type email to confirm deletion").fill(collector.email);
+  page.once("dialog", d => d.dismiss());
+  await remove.click();
+  expect(deleted).toBe(false);
+  page.once("dialog", d => d.accept());
+  await remove.click();
+  await expect(page.getByText("Account and collection deleted.")).toBeVisible();
+  expect(actions).toEqual(["reset_email", "recovery_link", "delete"]);
+  expect((await request.post(`/api/admin/users/${collector.id}/account`, { data: { action: "delete", confirmEmail: collector.email } })).status()).toBe(401);
+});

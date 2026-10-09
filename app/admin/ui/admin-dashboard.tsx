@@ -11,6 +11,9 @@ type UserRow = {
   email?: string | null;
   role: "user" | "admin";
   created_at: string;
+  last_sign_in_at?: string | null;
+  email_confirmed_at?: string | null;
+  banned_until?: string | null;
   card_count?: number;
   total_estimated_value?: number;
 };
@@ -106,6 +109,13 @@ export default function AdminDashboard() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [activity, setActivity] = useState("");
+  const accountDialog = useRef<HTMLDialogElement>(null);
+  const [accountUser, setAccountUser] = useState<UserRow | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [recoveryLink, setRecoveryLink] = useState("");
+  const [accountStatus, setAccountStatus] = useState("");
   const [role, setRole] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -190,6 +200,7 @@ export default function AdminDashboard() {
       });
       if (search) params.set("search", search);
       if (role) params.set("role", role);
+      if (activity) params.set("activity", activity);
       const res = await apiFetch(`/api/admin/users?${params.toString()}`, {
         cache: "no-store",
       });
@@ -238,10 +249,70 @@ export default function AdminDashboard() {
   }, []);
   useEffect(() => {
     if (ready) loadUsers();
-  }, [ready, page, role]);
+  }, [ready, page, role, activity]);
   useEffect(() => {
     if (ready) loadStats();
   }, [ready]);
+
+  useEffect(() => {
+    if (accountUser) accountDialog.current?.showModal();
+  }, [accountUser?.id]);
+
+  async function accountAction(
+    action: "reset_email" | "recovery_link" | "delete" | "reactivate",
+  ) {
+    if (!accountUser || accountBusy) return;
+    if (
+      action === "delete" &&
+      !window.confirm(
+        `Permanently delete ${accountUser.email}, their collection, binders and checklists? This cannot be undone.`,
+      )
+    )
+      return;
+    setAccountBusy(true);
+    setAccountStatus("");
+    setRecoveryLink("");
+    try {
+      const res = await apiFetch(`/api/admin/users/${accountUser.id}/account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          ...(action === "delete" ? { confirmEmail } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (action === "delete") {
+        if (selectedUserId === accountUser.id) {
+          collectionRequest.current++;
+          setSelectedUserId(null);
+          setSelectedUserCards([]);
+          setEditingCard(null);
+        }
+        setAccountUser(null);
+        setMessage({
+          type: "success",
+          text: data.warning || "Account and collection deleted.",
+        });
+      } else {
+        setRecoveryLink(data.recoveryLink || "");
+        setAccountStatus(
+          data.warning ||
+            (action === "reset_email"
+              ? "Password reset email requested. Ask the user to check their inbox and spam folder."
+              : action === "reactivate"
+                ? "Account reactivated."
+                : "Recovery link generated. Share it privately with this user; it expires according to the site's recovery settings. Creating another link may replace this one."),
+        );
+      }
+      void loadUsers();
+      void loadStats();
+    } catch (error) {
+      setAccountStatus((error as Error).message);
+    } finally {
+      setAccountBusy(false);
+    }
+  }
 
   async function updateRole(id: string, newRole: "user" | "admin") {
     try {
@@ -451,6 +522,22 @@ export default function AdminDashboard() {
             <option value="user">Users</option>
             <option value="admin">Admins</option>
           </select>
+          <label className="label">
+            Account activity
+            <select
+              className="sfInput"
+              value={activity}
+              onChange={(e) => {
+                setActivity(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All accounts</option>
+              <option value="inactive">No sign-in in 90 days</option>
+              <option value="never">Never signed in</option>
+              <option value="unconfirmed">Email not confirmed</option>
+            </select>
+          </label>
           <button
             className="sfGhostBtn"
             onClick={() => {
@@ -483,6 +570,20 @@ export default function AdminDashboard() {
                 <div className="adminUserIdentity">
                   <strong>{user.username || "Unnamed User"}</strong>
                   <div>{user.email || "No email"}</div>
+                  <div className="helperText">
+                    Last sign-in:{" "}
+                    {user.last_sign_in_at
+                      ? new Date(user.last_sign_in_at).toLocaleString()
+                      : "Never"}{" "}
+                    ·{" "}
+                    {user.email_confirmed_at
+                      ? "Email confirmed"
+                      : "Email not confirmed"}
+                    {user.banned_until &&
+                    Date.parse(user.banned_until) > Date.now()
+                      ? " · Account paused"
+                      : ""}
+                  </div>
                   <p className="helperText">
                     {user.role} · {user.card_count ?? 0} cards · Joined{" "}
                     {user.created_at
@@ -496,6 +597,25 @@ export default function AdminDashboard() {
                     onClick={() => loadUserCards(user.id)}
                   >
                     View Cards
+                  </button>
+                  <button
+                    className="sfGhostBtn small"
+                    disabled={
+                      user.role === "admin" || user.id === currentUser?.id
+                    }
+                    title={
+                      user.role === "admin"
+                        ? "Administrator accounts are protected"
+                        : undefined
+                    }
+                    onClick={() => {
+                      setAccountUser(user);
+                      setConfirmEmail("");
+                      setRecoveryLink("");
+                      setAccountStatus("");
+                    }}
+                  >
+                    Account tools
                   </button>
                   <button
                     className="sfGhostBtn small"
@@ -631,6 +751,131 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+      ) : null}
+
+      {accountUser ? (
+        <dialog
+          ref={accountDialog}
+          className="sfModalOverlay adminAccountDialog"
+          aria-label="Account tools"
+          onCancel={(e) => {
+            if (accountBusy) e.preventDefault();
+            else {
+              setAccountUser(null);
+              setRecoveryLink("");
+            }
+          }}
+        >
+          <section className="sfModalCard">
+            <div className="sfAdminTop">
+              <h2>Account tools</h2>
+              <button
+                className="sfGhostBtn"
+                disabled={accountBusy}
+                onClick={() => {
+                  setAccountUser(null);
+                  setRecoveryLink("");
+                }}
+              >
+                Close account tools
+              </button>
+            </div>
+            <p>
+              <strong>{accountUser.username || "User"}</strong>
+              <br />
+              {accountUser.email}
+            </p>
+            <h3>Password assistance</h3>
+            <p className="helperText">
+              Use a reset email or temporary recovery link so the user can
+              choose their own new password.
+            </p>
+            <div className="buttonRow">
+              <button
+                className="sfPrimaryBtn"
+                disabled={accountBusy}
+                onClick={() => void accountAction("reset_email")}
+              >
+                Send password reset email
+              </button>
+              <button
+                className="sfGhostBtn"
+                disabled={accountBusy}
+                onClick={() => void accountAction("recovery_link")}
+              >
+                Generate recovery link
+              </button>
+            </div>
+            {recoveryLink ? (
+              <label className="field">
+                Private recovery link
+                <textarea
+                  className="sfTextarea"
+                  readOnly
+                  value={recoveryLink}
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  className="sfGhostBtn"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(recoveryLink).then(
+                      () =>
+                        setAccountStatus(
+                          "Recovery link copied. Share it only with this user.",
+                        ),
+                      () =>
+                        setAccountStatus(
+                          "Select the recovery link above and copy it.",
+                        ),
+                    );
+                  }}
+                >
+                  Copy recovery link
+                </button>
+              </label>
+            ) : null}
+            <h3>Account access</h3>
+            <p className="helperText">
+              If deletion cleanup failed and left an account paused, you can
+              restore sign-in, then send a password reset.
+            </p>
+            <button
+              className="sfGhostBtn"
+              disabled={accountBusy}
+              onClick={() => void accountAction("reactivate")}
+            >
+              Reactivate account
+            </button>
+            <h3>Delete account</h3>
+            <p className="helperText">
+              Permanently removes this user, their cards, photos, binders,
+              checklists, want list and transactions. Inactivity is based on
+              sign-in history. Review their collection before deleting.
+            </p>
+            <label className="field">
+              Type email to confirm deletion
+              <input
+                className="sfInput"
+                value={confirmEmail}
+                onChange={(e) => setConfirmEmail(e.target.value)}
+                autoComplete="off"
+              />
+            </label>
+            <button
+              className="sfDangerBtn"
+              disabled={accountBusy || confirmEmail !== accountUser.email}
+              onClick={() => void accountAction("delete")}
+            >
+              Delete account permanently
+            </button>
+            {accountBusy ? <p role="status">Working…</p> : null}
+            {accountStatus ? (
+              <p role="status" className="workflowNotice">
+                {accountStatus}
+              </p>
+            ) : null}
+          </section>
+        </dialog>
       ) : null}
 
       {editingCard ? (

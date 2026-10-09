@@ -30,11 +30,8 @@ export async function GET(request: Request) {
     .order("id", { ascending: false });
   if (kind === "card")
     query = query.in("action", ["card.updated", "card.deleted"]);
-  else if (kind)
-    query = query.eq(
-      "action",
-      kind === "user" ? "user.role_changed" : "content.updated",
-    );
+  else if (kind === "user") query = query.eq("subject_type", "user");
+  else if (kind === "page") query = query.eq("action", "content.updated");
   const { data, count, error } = await query.range(
     (page - 1) * size,
     page * size - 1,

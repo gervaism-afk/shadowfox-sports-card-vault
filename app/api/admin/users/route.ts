@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/require-admin-api";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isInactiveAccount } from "@/lib/admin-account";
 import { fetchAllRows } from "@/lib/pagination";
 
 export async function GET(req: Request) {
@@ -10,6 +11,7 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search")?.trim() ?? "";
+  const activity = searchParams.get("activity") || "";
   const role = searchParams.get("role")?.trim() ?? "";
   const page = Number(searchParams.get("page") ?? "1");
   const pageSize = Number(searchParams.get("pageSize") ?? "20");
@@ -19,7 +21,8 @@ export async function GET(req: Request) {
     !Number.isInteger(pageSize) ||
     pageSize < 1 ||
     pageSize > 100 ||
-    (role && !["user", "admin"].includes(role))
+    (role && !["user", "admin"].includes(role)) ||
+    !["", "inactive", "never", "unconfirmed"].includes(activity)
   ) {
     return NextResponse.json(
       { error: "Invalid pagination or role" },
@@ -56,24 +59,81 @@ export async function GET(req: Request) {
     }
   }
 
-  let usersQuery = supabase
-    .from("profiles")
-    .select("id, username, email, role, created_at", { count: "exact" })
-    .order("created_at", { ascending: false })
-    .order("id")
-    .range(from, to);
-
-  if (role) usersQuery = usersQuery.eq("role", role);
-  if (search) {
-    const pattern = `%${search}%`.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    usersQuery = usersQuery.or(
-      `username.ilike."${pattern}",email.ilike."${pattern}"`,
+  function profileQuery() {
+    let query = supabase
+      .from("profiles")
+      .select("id, username, email, role, created_at", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .order("id");
+    if (role) query = query.eq("role", role);
+    if (search) {
+      const pattern = `%${search}%`.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      query = query.or(`username.ilike."${pattern}",email.ilike."${pattern}"`);
+    }
+    return query;
+  }
+  let users: any[] = [],
+    count = 0;
+  try {
+    if (activity) {
+      const [profiles, authUsers] = await Promise.all([
+        fetchAllRows((a, b) => profileQuery().range(a, b)),
+        (async () => {
+          const accounts = new Map();
+          for (let p = 1; ; p++) {
+            const { data, error } = await supabase.auth.admin.listUsers({
+              page: p,
+              perPage: 1000,
+            });
+            if (error) throw error;
+            for (const user of data.users) accounts.set(user.id, user);
+            if (data.users.length < 1000) return accounts;
+          }
+        })(),
+      ]);
+      const matches = profiles.filter((profile: any) => {
+        const account = authUsers.get(profile.id);
+        if (!account) return false;
+        if (activity === "never") return !account.last_sign_in_at;
+        if (activity === "unconfirmed") return !account.email_confirmed_at;
+        return isInactiveAccount(account.last_sign_in_at, account.created_at);
+      });
+      count = matches.length;
+      users = matches
+        .slice(from, to + 1)
+        .map((profile: any) => ({
+          ...profile,
+          last_sign_in_at: authUsers.get(profile.id)?.last_sign_in_at || null,
+          email_confirmed_at:
+            authUsers.get(profile.id)?.email_confirmed_at || null,
+          banned_until: authUsers.get(profile.id)?.banned_until || null,
+        }));
+    } else {
+      const result = await profileQuery().range(from, to);
+      if (result.error) throw result.error;
+      count = result.count || 0;
+      users = await Promise.all(
+        (result.data || []).map(async (profile: any) => {
+          const { data, error } = await supabase.auth.admin.getUserById(
+            profile.id,
+          );
+          if (error || !data.user)
+            throw new Error("Could not load account status");
+          return {
+            ...profile,
+            last_sign_in_at: data.user.last_sign_in_at || null,
+            email_confirmed_at: data.user.email_confirmed_at || null,
+            banned_until: data.user.banned_until || null,
+          };
+        }),
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { error: "Could not load account status. Please refresh." },
+      { status: 500 },
     );
   }
-
-  const { data: users, error: usersError, count } = await usersQuery;
-  if (usersError)
-    return NextResponse.json({ error: usersError.message }, { status: 500 });
 
   const userIds = (users ?? []).map((u: any) => u.id);
   let aggregatesByUser = new Map();

@@ -12,6 +12,10 @@ export type AdminActivity = {
 export const ACTIVITY_LABELS: Record<string, string> = {
   "card.updated": "Card edited",
   "card.deleted": "Card deleted",
+  "user.reset_email": "Password reset email requested",
+  "user.recovery_link": "Recovery link generated",
+  "user.delete": "Account deleted",
+  "user.reactivate": "Account reactivated",
   "user.role_changed": "Role changed",
   "content.updated": "Site content edited",
 };
